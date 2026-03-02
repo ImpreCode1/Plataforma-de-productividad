@@ -12,7 +12,13 @@ app = FastAPI(
 
 app.include_router(users_router, prefix="/users", tags=["Users"])
 
-
+@app.get("/")
+def HelloWorld():
+    try:
+        return{"API de Plataforma de Productividad Impresistem Funcionando Correctamente"}
+    except Exception:
+        return{"API de Plataforma de Productividad Impresistem NO esta funcionando :()"}
+        
 @app.get("/health")
 def health(db: Session = Depends(get_db)):
     try:
