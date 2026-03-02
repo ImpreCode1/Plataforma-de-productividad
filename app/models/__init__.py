@@ -4,3 +4,6 @@ from .user import User
 from .role import Role
 from .user_role import UserRole
 from .employment_history import EmploymentHistory
+from .indicator import Indicator
+from .position_indicator import PositionIndicator
+from .user_indicator_override import UserIndicatorOverride
