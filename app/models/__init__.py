@@ -7,3 +7,8 @@ from .employment_history import EmploymentHistory
 from .indicator import Indicator
 from .position_indicator import PositionIndicator
 from .user_indicator_override import UserIndicatorOverride
+from .evaluation_period import EvaluationPeriod
+from .evaluation import Evaluation
+from .evaluation_result import EvaluationResult
+from .evidence import Evidence
+from .action_plan import ActionPlan
