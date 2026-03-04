@@ -9,6 +9,8 @@ from app.db.session import get_db
 from app.models.user import User
 from app.modules.users.schemas import UserCreate, UserResponse, UserUpdate
 
+from app.core.security.dependencies import get_current_user, require_roles
+
 router = APIRouter()
 
 @router.get("/status")
@@ -86,3 +88,18 @@ def deactivate_user(user_id: UUID, db: Session = Depends(get_db)):
 
     user.is_active = False
     db.commit()
+      
+@router.get("/me")
+def get_me(current_user: User = Depends(get_current_user)):
+    return {
+        "id": str(current_user.id),
+        "email": current_user.email,
+        "name": current_user.name,
+    }
+
+
+@router.get("/admin-only")
+def admin_only(
+    current_user: User = Depends(require_roles("ADMIN"))
+):
+    return {"message": "Acceso permitido solo a ADMIN"}

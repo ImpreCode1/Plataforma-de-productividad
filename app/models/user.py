@@ -5,7 +5,10 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from app.models.role import Role
 
 class User(Base):
     __tablename__ = "users"
@@ -54,9 +57,15 @@ class User(Base):
 
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow
+        default=datetime.now,
+        onupdate=datetime.now
     )
 
     position = relationship("Position", backref="users")
     leader = relationship("User", remote_side=[id], backref="team_members")
+    
+    roles: Mapped[list["Role"]] = relationship(
+    "Role",
+    secondary="user_roles",
+    back_populates="users",
+)

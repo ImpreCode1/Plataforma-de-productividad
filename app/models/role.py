@@ -4,6 +4,10 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 class Role(Base):
@@ -27,3 +31,9 @@ class Role(Base):
     )
 
     users = relationship("UserRole", back_populates="role")
+    
+    users: Mapped[list["User"]] = relationship(
+        "User",
+        secondary="user_roles",
+        back_populates="roles",
+    )
