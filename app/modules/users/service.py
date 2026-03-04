@@ -8,7 +8,7 @@ from app.models.position import Position
 from app.models.role import Role
 from app.models.user import User
 from app.models.user_role import UserRole
-from app.modules.users.schemas import UserCreate, UserUpdate
+from app.modules.users.schemas import UserCreate
 
 def get_user_by_id(db: Session, user_id: UUID) -> User:
     user = db.get(User, user_id)
