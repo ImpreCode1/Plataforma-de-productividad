@@ -7,7 +7,6 @@ from app.models.user import User
 from app.modules.users import service
 from app.modules.users.schemas import (
     UserCreate,
-    UserUpdate,
     UserResponse,
     ChangeStatusRequest,
     AssignLeaderRequest,

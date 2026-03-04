@@ -3,6 +3,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from app.modules.users.router import router as users_router
+from app.modules.evaluation_engine.router import router as evaluation_engine_router
+from app.modules.evaluation_periods.router import router as evaluation_periods_router
+
 from app.db.session import get_db
 
 app = FastAPI(
@@ -11,6 +14,8 @@ app = FastAPI(
 )
 
 app.include_router(users_router, prefix="/users", tags=["Users"])
+app.include_router(evaluation_engine_router, prefix="/evaluation_engine", tags=["Evaluation_engines"])
+app.include_router(evaluation_periods_router, prefix="/evaluation_period", tags=["Evaluation_periods"])
 
 @app.get("/")
 def HelloWorld():

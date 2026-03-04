@@ -119,3 +119,75 @@ def generate_for_period(db: Session, period_id: UUID):
         "total_results_created": total_results,
         "message": "Evaluaciones generadas correctamente",
     }
+    
+from datetime import datetime
+from sqlalchemy import func
+
+
+def close_period(db: Session, period_id: UUID):
+    """
+    Cierra un periodo:
+    - Verifica que todas las evaluaciones estén completas
+    - Calcula final_score
+    - Marca evaluaciones como CLOSED
+    - Marca periodo como CLOSED
+    """
+
+    period = db.get(EvaluationPeriod, period_id)
+
+    if not period:
+        raise HTTPException(status_code=404, detail="Periodo no encontrado")
+
+    if period.status != "OPEN":
+        raise HTTPException(
+            status_code=400,
+            detail="Solo se pueden cerrar periodos OPEN",
+        )
+
+    evaluations = db.scalars(
+        select(Evaluation).where(Evaluation.period_id == period.id)
+    ).all()
+
+    if not evaluations:
+        raise HTTPException(
+            status_code=400,
+            detail="El periodo no tiene evaluaciones generadas",
+        )
+
+    total_closed = 0
+
+    for evaluation in evaluations:
+
+        results = db.scalars(
+            select(EvaluationResult).where(
+                EvaluationResult.evaluation_id == evaluation.id
+            )
+        ).all()
+
+        # 🔒 Validar que todos tengan score
+        if any(r.weighted_score is None for r in results):
+            raise HTTPException(
+                status_code=400,
+                detail=f"La evaluación {evaluation.id} no está completa",
+            )
+
+        # 🧮 Calcular promedio
+        total_score = sum(float(r.weighted_score) for r in results)
+        final_score = total_score / len(results)
+
+        evaluation.final_score = round(final_score, 2)
+        evaluation.status = "CLOSED"
+        evaluation.closed_at = datetime.now()
+
+        total_closed += 1
+
+    # 🔐 Cerrar periodo
+    period.status = "CLOSED"
+
+    db.commit()
+
+    return {
+        "period_id": str(period.id),
+        "total_evaluations_closed": total_closed,
+        "message": "Periodo cerrado correctamente",
+    }
