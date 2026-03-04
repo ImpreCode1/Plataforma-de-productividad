@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import List
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -34,3 +35,18 @@ class UserResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    
+class AssignRolesRequest(BaseModel):
+    role_ids: List[UUID]
+
+
+class AssignLeaderRequest(BaseModel):
+    leader_id: UUID | None
+
+
+class ChangePositionRequest(BaseModel):
+    position_id: UUID | None
+
+
+class ChangeStatusRequest(BaseModel):
+    is_active: bool
