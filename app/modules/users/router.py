@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -12,7 +12,7 @@ from app.modules.users.schemas import UserCreate, UserResponse, UserUpdate
 router = APIRouter()
 
 @router.get("/status")
-def status():
+def state():
     return {"message": "Users endpoint working"}
 
 @router.get("/", response_model=list[UserResponse])
