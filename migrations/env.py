@@ -10,7 +10,7 @@ from sqlalchemy import pool
 
 from alembic import context
 
-from app.db.base import Base
+from app.models.base import Base
 from app.core.config import settings  # 👈 usamos Settings real
 import app.models
 

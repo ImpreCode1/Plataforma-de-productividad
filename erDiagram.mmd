@@ -54,7 +54,6 @@ erDiagram
         int year
         decimal target_value
         decimal weight
-        timestamp created_at
     }
 
     INDICATOR_TRACKING {
@@ -68,12 +67,11 @@ erDiagram
         boolean target_met
         string status
         timestamp created_at
-        UNIQUE user_id, position_indicator_id, month
     }
 
     ACTION_PLAN {
         uuid id PK
-        uuid indicator_tracking_id FK UNIQUE
+        uuid indicator_tracking_id FK
         text reason_not_met
         text action_plan
         uuid created_by FK
@@ -87,7 +85,6 @@ erDiagram
         uuid uploaded_by FK
         timestamp uploaded_at
     }
-
 
     ORGANIZATION_UNIT ||--o{ ORGANIZATION_UNIT : parent_child
     ORGANIZATION_UNIT ||--o{ POSITION : contains

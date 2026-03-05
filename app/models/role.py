@@ -1,13 +1,9 @@
 import uuid
-from sqlalchemy import String
+from sqlalchemy import String, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from app.models.user import User
+from app.models.base import Base
 
 
 class Role(Base):
@@ -21,19 +17,37 @@ class Role(Base):
 
     name: Mapped[str] = mapped_column(
         String(50),
-        nullable=False,
-        unique=True
+        unique=True,
+        nullable=False
     )
 
-    description: Mapped[str | None] = mapped_column(
-        String(255),
-        nullable=True
+    description: Mapped[str | None] = mapped_column(String(255))
+
+    users = relationship(
+        "UserRole",
+        back_populates="role",
+        cascade="all, delete-orphan"
     )
 
-    users = relationship("UserRole", back_populates="role")
-    
-    users: Mapped[list["User"]] = relationship(
-        "User",
-        secondary="user_roles",
-        back_populates="roles",
+
+class UserRole(Base):
+    __tablename__ = "user_roles"
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "role_id"),
     )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id"),
+        primary_key=True
+    )
+
+    role_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("roles.id"),
+        primary_key=True
+    )
+
+    user = relationship("User", back_populates="roles")
+    role = relationship("Role", back_populates="users")
