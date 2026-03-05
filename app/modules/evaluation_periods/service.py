@@ -1,7 +1,7 @@
 from uuid import UUID
 from datetime import datetime
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import func, select
 from fastapi import HTTPException
 
 from app.models.evaluation_period import EvaluationPeriod
@@ -11,7 +11,6 @@ from app.models.user import User
 from app.models.indicator import Indicator
 from app.models.position_indicator import PositionIndicator
 from app.models.user_indicator_override import UserIndicatorOverride
-
 
 # =========================================================
 # CREATE PERIOD
@@ -215,3 +214,52 @@ def close_period(db: Session, period_id: UUID):
         "evaluations_closed": total_closed,
         "message": "Periodo cerrado correctamente",
     }
+    
+# =====================================================
+# LIST PERIODS
+# =====================================================
+
+def list_periods(db: Session):
+    periods = db.scalars(
+        select(EvaluationPeriod)
+        .order_by(EvaluationPeriod.opened_at.desc())
+    ).all()
+
+    return periods
+
+
+# =====================================================
+# GET PERIOD DETAIL
+# =====================================================
+
+def get_period_detail(db: Session, period_id: UUID):
+    period = db.get(EvaluationPeriod, period_id)
+
+    if not period:
+        raise HTTPException(status_code=404, detail="Periodo no encontrado")
+
+    # Métricas adicionales
+    total_evaluations = db.scalar(
+        select(func.count(Evaluation.id))
+        .where(Evaluation.period_id == period.id)
+    )
+
+    closed_evaluations = db.scalar(
+        select(func.count(Evaluation.id))
+        .where(
+            Evaluation.period_id == period.id,
+            Evaluation.status == "CLOSED"
+        )
+    )
+
+    return {
+        "id": period.id,
+        "name": period.year,
+        "start_date": period.opened_at,
+        "end_date": period.closed_at,
+        "status": period.status,
+        "total_evaluations": total_evaluations or 0,
+        "closed_evaluations": closed_evaluations or 0,
+    }
+    
+    

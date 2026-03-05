@@ -31,3 +31,12 @@ class PeriodCloseResponse(BaseModel):
     period_id: UUID
     evaluations_closed: int
     message: str
+    
+class EvaluationPeriodDetailResponse(BaseModel):
+    id: UUID
+    name: str
+    start_date: date
+    end_date: date
+    status: str
+    total_evaluations: int
+    closed_evaluations: int

@@ -1,12 +1,14 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from uuid import UUID
+from typing import List
 
 from app.db.session import get_db
 from app.modules.evaluation_periods import service
 from app.modules.evaluation_periods.schemas import (
     EvaluationPeriodCreate,
     EvaluationPeriodResponse,
+    EvaluationPeriodDetailResponse,
     PeriodOpenResponse,
     PeriodCloseResponse,
 )
@@ -16,7 +18,7 @@ router = APIRouter()
 
 
 # =====================================================
-# CREATE PERIOD
+# CREATE
 # =====================================================
 
 @router.post(
@@ -38,7 +40,40 @@ def create_period(
 
 
 # =====================================================
-# OPEN PERIOD (Generates evaluations + results)
+# LIST
+# =====================================================
+
+@router.get(
+    "/",
+    response_model=List[EvaluationPeriodResponse],
+    summary="List all evaluation periods",
+)
+def list_periods(
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles("ADMIN")),
+):
+    return service.list_periods(db)
+
+
+# =====================================================
+# DETAIL
+# =====================================================
+
+@router.get(
+    "/{period_id}",
+    response_model=EvaluationPeriodDetailResponse,
+    summary="Get evaluation period detail",
+)
+def get_period_detail(
+    period_id: UUID,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles("ADMIN")),
+):
+    return service.get_period_detail(db, period_id)
+
+
+# =====================================================
+# OPEN
 # =====================================================
 
 @router.patch(
@@ -55,7 +90,7 @@ def open_period(
 
 
 # =====================================================
-# CLOSE PERIOD (Calculate final scores)
+# CLOSE
 # =====================================================
 
 @router.patch(

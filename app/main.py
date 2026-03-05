@@ -3,7 +3,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from app.modules.users.router import router as users_router
-from app.modules.evaluation_engine.router import router as evaluation_engine_router
 from app.modules.evaluation_periods.router import router as evaluation_periods_router
 from app.modules.evaluation_results.router import router as evaluation_results_router
 
@@ -15,7 +14,6 @@ app = FastAPI(
 )
 
 app.include_router(users_router, prefix="/users", tags=["Users"])
-app.include_router(evaluation_engine_router, prefix="/evaluation_engine", tags=["Evaluation_engines"])
 app.include_router(evaluation_periods_router, prefix="/evaluation_period", tags=["Evaluation_periods"])
 app.include_router(evaluation_results_router, prefix="/evaluation_results", tags=["Evaluation_results"])
 
