@@ -6,6 +6,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
+from decimal import Decimal
 
 class Indicator(Base):
     __tablename__ = "indicators"
@@ -20,12 +21,12 @@ class Indicator(Base):
 
     formula_text: Mapped[str | None] = mapped_column(String(500))
 
-    target_value: Mapped[float] = mapped_column(
+    target_value: Mapped[Decimal] = mapped_column(
         Numeric(10, 2),
         nullable=False
     )
 
-    weight: Mapped[float] = mapped_column(
+    weight: Mapped[Decimal] = mapped_column(
         Numeric(5, 2),
         nullable=False
     )

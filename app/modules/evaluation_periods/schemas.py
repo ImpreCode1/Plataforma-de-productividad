@@ -18,3 +18,16 @@ class EvaluationPeriodResponse(BaseModel):
     end_date: date
     status: str
     created_at: datetime
+    
+class PeriodOpenResponse(BaseModel):
+    period_id: UUID
+    users_processed: int
+    evaluations_created: int
+    results_created: int
+    message: str
+
+
+class PeriodCloseResponse(BaseModel):
+    period_id: UUID
+    evaluations_closed: int
+    message: str

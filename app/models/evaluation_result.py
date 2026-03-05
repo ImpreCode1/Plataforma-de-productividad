@@ -5,6 +5,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
+from decimal import Decimal
+
 
 class EvaluationResult(Base):
     __tablename__ = "evaluation_results"
@@ -27,17 +29,17 @@ class EvaluationResult(Base):
         nullable=False
     )
 
-    achieved_value: Mapped[float] = mapped_column(
+    achieved_value: Mapped[Decimal] = mapped_column(
         Numeric(10, 2),
         nullable=False
     )
 
-    achievement_percentage: Mapped[float] = mapped_column(
+    achievement_percentage: Mapped[Decimal] = mapped_column(
         Numeric(5, 2),
         nullable=False
     )
 
-    weighted_score: Mapped[float] = mapped_column(
+    weighted_score: Mapped[Decimal] = mapped_column(
         Numeric(6, 2),
         nullable=False
     )

@@ -7,13 +7,23 @@ from app.modules.evaluation_periods import service
 from app.modules.evaluation_periods.schemas import (
     EvaluationPeriodCreate,
     EvaluationPeriodResponse,
+    PeriodOpenResponse,
+    PeriodCloseResponse,
 )
 from app.core.security.dependencies import require_roles
 
 router = APIRouter()
 
 
-@router.post("/", response_model=EvaluationPeriodResponse)
+# =====================================================
+# CREATE PERIOD
+# =====================================================
+
+@router.post(
+    "/",
+    response_model=EvaluationPeriodResponse,
+    summary="Create evaluation period (ADMIN only)",
+)
 def create_period(
     payload: EvaluationPeriodCreate,
     db: Session = Depends(get_db),
@@ -27,7 +37,15 @@ def create_period(
     )
 
 
-@router.patch("/{period_id}/open", response_model=EvaluationPeriodResponse)
+# =====================================================
+# OPEN PERIOD (Generates evaluations + results)
+# =====================================================
+
+@router.patch(
+    "/{period_id}/open",
+    response_model=PeriodOpenResponse,
+    summary="Open evaluation period and generate evaluations",
+)
 def open_period(
     period_id: UUID,
     db: Session = Depends(get_db),
@@ -36,7 +54,15 @@ def open_period(
     return service.open_period(db, period_id)
 
 
-@router.patch("/{period_id}/close", response_model=EvaluationPeriodResponse)
+# =====================================================
+# CLOSE PERIOD (Calculate final scores)
+# =====================================================
+
+@router.patch(
+    "/{period_id}/close",
+    response_model=PeriodCloseResponse,
+    summary="Close evaluation period and finalize scores",
+)
 def close_period(
     period_id: UUID,
     db: Session = Depends(get_db),
