@@ -38,20 +38,10 @@ erDiagram
         uuid role_id FK
     }
 
-    EMPLOYMENT_HISTORY {
-        uuid id PK
-        uuid user_id FK
-        uuid position_id FK
-        date start_date
-        date end_date
-    }
-
     INDICATOR {
         uuid id PK
         string name
         string formula_text
-        decimal target_value
-        decimal weight
         string frequency
         boolean is_active
         timestamp created_at
@@ -62,58 +52,40 @@ erDiagram
         uuid position_id FK
         uuid indicator_id FK
         int year
+        decimal target_value
+        decimal weight
+        timestamp created_at
     }
 
-    USER_INDICATOR_OVERRIDE {
+    INDICATOR_TRACKING {
         uuid id PK
         uuid user_id FK
-        uuid indicator_id FK
-        int year
-    }
-
-    EVALUATION_PERIOD {
-        uuid id PK
-        int year
+        uuid position_indicator_id FK
         int month
-        string status
-        timestamp opened_at
-        timestamp closed_at
-    }
-
-    EVALUATION {
-        uuid id PK
-        uuid period_id FK
-        uuid user_id FK
-        uuid leader_id FK
-        string status
-        decimal final_score
-        timestamp closed_at
-    }
-
-    EVALUATION_RESULT {
-        uuid id PK
-        uuid evaluation_id FK
-        uuid indicator_id FK
         decimal achieved_value
         decimal achievement_percentage
         decimal weighted_score
-    }
-
-    EVIDENCE {
-        uuid id PK
-        uuid evaluation_result_id FK
-        string file_path
-        uuid uploaded_by FK
-        timestamp uploaded_at
+        boolean target_met
+        string status
+        timestamp created_at
+        UNIQUE user_id, position_indicator_id, month
     }
 
     ACTION_PLAN {
         uuid id PK
-        uuid evaluation_result_id FK
+        uuid indicator_tracking_id FK UNIQUE
         text reason_not_met
         text action_plan
         uuid created_by FK
         timestamp created_at
+    }
+
+    EVIDENCE {
+        uuid id PK
+        uuid indicator_tracking_id FK
+        string file_path
+        uuid uploaded_by FK
+        timestamp uploaded_at
     }
 
 
@@ -121,18 +93,15 @@ erDiagram
     ORGANIZATION_UNIT ||--o{ POSITION : contains
     POSITION ||--o{ USER : assigned
     USER ||--o{ USER : leads
-    USER ||--o{ EMPLOYMENT_HISTORY : has
-    POSITION ||--o{ EMPLOYMENT_HISTORY : history
+
     USER ||--o{ USER_ROLE : has
     ROLE ||--o{ USER_ROLE : assigned
+
     POSITION ||--o{ POSITION_INDICATOR : configures
     INDICATOR ||--o{ POSITION_INDICATOR : applies
-    USER ||--o{ USER_INDICATOR_OVERRIDE : overrides
-    INDICATOR ||--o{ USER_INDICATOR_OVERRIDE : customizable
-    EVALUATION_PERIOD ||--o{ EVALUATION : contains
-    USER ||--o{ EVALUATION : evaluated
-    USER ||--o{ EVALUATION : evaluates
-    EVALUATION ||--o{ EVALUATION_RESULT : generates
-    INDICATOR ||--o{ EVALUATION_RESULT : measures
-    EVALUATION_RESULT ||--o{ EVIDENCE : supports
-    EVALUATION_RESULT ||--|| ACTION_PLAN : triggers
+
+    USER ||--o{ INDICATOR_TRACKING : records
+    POSITION_INDICATOR ||--o{ INDICATOR_TRACKING : tracks
+
+    INDICATOR_TRACKING ||--|| ACTION_PLAN : generates
+    INDICATOR_TRACKING ||--o{ EVIDENCE : supports
