@@ -1,6 +1,10 @@
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from app.core.security.dependencies import get_current_user
+
+from app.modules.users.router import router as users_router
+from app.modules.positions.router import router as positions_router
 
 from app.db.session import get_db
 
@@ -8,6 +12,9 @@ app = FastAPI(
     title="Plataforma de Evaluación de Productividad",
     version="1.0.0"
 )
+
+app.include_router(users_router, dependencies=[Depends(get_current_user)])
+app.include_router(positions_router, dependencies=[Depends(get_current_user)])
 
 @app.get("/")
 def HelloWorld():

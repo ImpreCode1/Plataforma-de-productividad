@@ -28,8 +28,8 @@ DBSession = Annotated[Session, Depends(get_db)]
 
 def get_current_user(
     request: Request,
+    db: DBSession,
     hydra_access: str | None = Cookie(default=None),
-    db: DBSession = Depends(),
 ) -> User:
     
     # 1️⃣ Verificar existencia del token
