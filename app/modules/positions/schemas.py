@@ -1,22 +1,54 @@
-from pydantic import BaseModel
 from uuid import UUID
 from datetime import datetime
-from typing import Optional
+from pydantic import BaseModel
+
+
+# -----------------------------
+# Base
+# -----------------------------
+
 
 class PositionBase(BaseModel):
     name: str
-    organization_unit_id: UUID
+    description: str | None = None
+
+
+# -----------------------------
+# Create
+# -----------------------------
+
 
 class PositionCreate(PositionBase):
     pass
 
+
+# -----------------------------
+# Update
+# -----------------------------
+
+
 class PositionUpdate(BaseModel):
-    name: Optional[str] = None
-    organization_unit_id: Optional[UUID] = None
+    name: str | None = None
+    description: str | None = None
+
+
+# -----------------------------
+# Response
+# -----------------------------
+
 
 class PositionResponse(PositionBase):
     id: UUID
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
+
+
+# -----------------------------
+# List Response
+# -----------------------------
+
+
+class PositionListResponse(BaseModel):
+    positions: list[PositionResponse]
