@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from uuid import UUID
 
@@ -21,9 +21,21 @@ def create_tracking(data: IndicatorTrackingCreate, db: Session = Depends(get_db)
 
 
 @router.get("/", response_model=list[IndicatorTrackingResponse])
-def list_tracking(db: Session = Depends(get_db)):
+def list_tracking(
+    user_id: UUID | None = Query(None),
+    month: int | None = Query(None),
+    year: int | None = Query(None),
+    position_indicator_id: UUID | None = Query(None),
+    db: Session = Depends(get_db)
+):
 
-    return IndicatorTrackingService.list_tracking(db)
+    return IndicatorTrackingService.list_tracking(
+        db,
+        user_id,
+        month,
+        year,
+        position_indicator_id
+    )
 
 
 @router.get("/{tracking_id}", response_model=IndicatorTrackingResponse)

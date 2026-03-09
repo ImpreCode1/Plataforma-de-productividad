@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from app.models import Evidence
 from datetime import datetime
+from uuid import UUID
 
 
 class EvidenceService:
@@ -11,8 +12,7 @@ class EvidenceService:
         evidence = Evidence(
             indicator_tracking_id=data.indicator_tracking_id,
             file_path=data.file_path,
-            uploaded_by=user_id,
-            uploaded_at=datetime.utcnow()
+            uploaded_by=user_id
         )
 
         db.add(evidence)
@@ -22,6 +22,26 @@ class EvidenceService:
         return evidence
 
     @staticmethod
-    def list_evidence(db: Session):
+    def list_evidences(db: Session):
 
         return db.query(Evidence).all()
+
+    @staticmethod
+    def get_evidence(db: Session, evidence_id: UUID):
+
+        return db.query(Evidence).filter(
+            Evidence.id == evidence_id
+        ).first()
+
+    @staticmethod
+    def delete_evidence(db: Session, evidence_id: UUID):
+
+        evidence = db.query(Evidence).filter(
+            Evidence.id == evidence_id
+        ).first()
+
+        if evidence:
+            db.delete(evidence)
+            db.commit()
+
+        return evidence

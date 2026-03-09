@@ -11,6 +11,7 @@ from app.modules.position_indicators.router import router as position_indicators
 from app.modules.indicator_tracking.router import router as indicator_tracking_router
 from app.modules.evidence.router import router as evidence_router
 from app.modules.action_plan.router import router as action_plan_router
+from app.modules.dashboard.router import router as dashboard_router
 
 from app.db.session import get_db
 
@@ -27,6 +28,7 @@ app.include_router(position_indicators_router, dependencies=[Depends(get_current
 app.include_router(indicator_tracking_router, dependencies=[Depends(get_current_user)])
 app.include_router(evidence_router, dependencies=[Depends(get_current_user)])
 app.include_router(action_plan_router, dependencies=[Depends(get_current_user)])
+app.include_router(dashboard_router, dependencies=[Depends(get_current_user)])
 
 @app.get("/")
 def HelloWorld():

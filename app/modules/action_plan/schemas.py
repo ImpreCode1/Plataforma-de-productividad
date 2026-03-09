@@ -9,6 +9,11 @@ class ActionPlanCreate(BaseModel):
     action_plan: str
 
 
+class ActionPlanUpdate(BaseModel):
+    reason_not_met: str
+    action_plan: str
+
+
 class ActionPlanResponse(BaseModel):
     id: UUID
     indicator_tracking_id: UUID
@@ -18,4 +23,4 @@ class ActionPlanResponse(BaseModel):
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True

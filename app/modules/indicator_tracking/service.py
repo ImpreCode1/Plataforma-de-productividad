@@ -57,9 +57,34 @@ class IndicatorTrackingService:
         ).first()
 
     @staticmethod
-    def list_tracking(db: Session):
+    def list_tracking(
+        db,
+        user_id=None,
+        month=None,
+        year=None,
+        position_indicator_id=None
+    ):
 
-        return db.query(IndicatorTracking).all()
+        query = db.query(IndicatorTracking)
+
+        if user_id:
+            query = query.filter(IndicatorTracking.user_id == user_id)
+
+        if month:
+            query = query.filter(IndicatorTracking.month == month)
+
+        if position_indicator_id:
+            query = query.filter(
+                IndicatorTracking.position_indicator_id == position_indicator_id
+            )
+
+        if year:
+            query = query.join(
+                PositionIndicator,
+                IndicatorTracking.position_indicator_id == PositionIndicator.id
+            ).filter(PositionIndicator.year == year)
+
+        return query.all()
 
     @staticmethod
     def update_tracking(db: Session, tracking_id: UUID, achieved_value: float):

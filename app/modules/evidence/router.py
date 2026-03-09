@@ -10,12 +10,8 @@ router = APIRouter(prefix="/evidences", tags=["Evidence"])
 
 
 @router.post("/", response_model=EvidenceResponse)
-def create_evidence(
-    data: EvidenceCreate,
-    db: Session = Depends(get_db)
-):
+def create_evidence(data: EvidenceCreate, db: Session = Depends(get_db)):
 
-    # luego se conecta con auth
     user_id = data.indicator_tracking_id
 
     return EvidenceService.create_evidence(db, data, user_id)
@@ -24,4 +20,16 @@ def create_evidence(
 @router.get("/", response_model=list[EvidenceResponse])
 def list_evidences(db: Session = Depends(get_db)):
 
-    return EvidenceService.list_evidence(db)
+    return EvidenceService.list_evidences(db)
+
+
+@router.get("/{evidence_id}", response_model=EvidenceResponse)
+def get_evidence(evidence_id: UUID, db: Session = Depends(get_db)):
+
+    return EvidenceService.get_evidence(db, evidence_id)
+
+
+@router.delete("/{evidence_id}")
+def delete_evidence(evidence_id: UUID, db: Session = Depends(get_db)):
+
+    return EvidenceService.delete_evidence(db, evidence_id)
