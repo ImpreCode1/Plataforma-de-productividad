@@ -36,7 +36,7 @@ app.include_router(roles_router, dependencies=[Depends(get_current_user)])
 @app.get("/")
 def HelloWorld():
     try:
-        return{"API de Plataforma de Productividad Impresistem Funcionando Correctamente"}
+        return{"API de Plataforma de Productividad Impresistem funcionando Correctamente"}
     except Exception:
         return{"API de Plataforma de Productividad Impresistem NO esta funcionando :()"}
         
