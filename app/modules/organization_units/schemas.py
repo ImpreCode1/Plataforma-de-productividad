@@ -29,3 +29,17 @@ class OrganizationUnitResponse(OrganizationUnitBase):
 
 class OrganizationUnitListResponse(BaseModel):
     units: list[OrganizationUnitResponse]
+    
+class OrganizationUnitTree(BaseModel):
+
+    id: UUID
+    name: str
+    type: str
+    parent_id: UUID | None
+
+    children: list["OrganizationUnitTree"] = []
+
+    class Config:
+        from_attributes = True
+
+OrganizationUnitTree.model_rebuild()

@@ -65,3 +65,34 @@ def delete_unit(db: Session, unit_id: UUID):
     db.commit()
 
     return unit
+
+def get_units_tree(db: Session):
+
+    units = db.query(OrganizationUnit).all()
+
+    unit_map = {}
+    tree = []
+
+    # Crear mapa
+    for unit in units:
+        unit_map[unit.id] = {
+            "id": unit.id,
+            "name": unit.name,
+            "type": unit.type,
+            "parent_id": unit.parent_id,
+            "children": []
+        }
+
+    # Construir jerarquía
+    for unit in unit_map.values():
+
+        if unit["parent_id"]:
+            parent = unit_map.get(unit["parent_id"])
+
+            if parent:
+                parent["children"].append(unit)
+
+        else:
+            tree.append(unit)
+
+    return tree

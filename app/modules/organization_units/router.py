@@ -9,6 +9,7 @@ from app.modules.organization_units.schemas import (
     OrganizationUnitResponse,
     OrganizationUnitListResponse
 )
+from app.modules.organization_units.schemas import OrganizationUnitTree
 
 router = APIRouter(
     prefix="/organization-units",
@@ -86,3 +87,14 @@ def delete_unit(
 ):
 
     return service.delete_unit(db, unit_id)
+
+@router.get(
+    "/tree",
+    response_model=list[OrganizationUnitTree]
+)
+def get_units_tree(
+    db: DBSession,
+    current_user: CurrentUser
+):
+
+    return service.get_units_tree(db)
