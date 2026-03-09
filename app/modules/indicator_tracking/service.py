@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from uuid import UUID
-from models import IndicatorTracking, PositionIndicator
+from app.models import IndicatorTracking, PositionIndicator
 from datetime import datetime
 
 

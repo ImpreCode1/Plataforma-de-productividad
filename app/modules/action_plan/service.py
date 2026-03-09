@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from models import ActionPlan
+from app.models import ActionPlan
 from datetime import datetime
 
 

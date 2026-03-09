@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from db.session import get_db
-from schemas import ActionPlanCreate, ActionPlanResponse
-from service import ActionPlanService
+from app.db.session import get_db
+from app.modules.action_plan.schemas import ActionPlanCreate, ActionPlanResponse
+from app.modules.action_plan.service import ActionPlanService
 
 router = APIRouter(prefix="/action-plans", tags=["Action Plans"])
 

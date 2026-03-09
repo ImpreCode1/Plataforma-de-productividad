@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from uuid import UUID
 
-from db.session import get_db
-from schemas import EvidenceCreate, EvidenceResponse
-from service import EvidenceService
+from app.db.session import get_db
+from app.modules.evidence.schemas import EvidenceCreate, EvidenceResponse
+from app.modules.evidence.service import EvidenceService
 
 router = APIRouter(prefix="/evidences", tags=["Evidence"])
 

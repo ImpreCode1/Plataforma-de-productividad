@@ -2,14 +2,14 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from uuid import UUID
 
-from db.session import get_db
-from schemas import (
+from app.db.session import get_db
+from app.modules.indicator_tracking.schemas import (
     IndicatorTrackingCreate,
     IndicatorTrackingUpdate,
     IndicatorTrackingResponse
 )
 
-from service import IndicatorTrackingService
+from app.modules.indicator_tracking.service import IndicatorTrackingService
 
 router = APIRouter(prefix="/indicator-tracking", tags=["Indicator Tracking"])
 
