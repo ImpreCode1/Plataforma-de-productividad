@@ -4,3 +4,4 @@ from .role import Role, UserRole
 from .indicator import Indicator, PositionIndicator
 from .base import Base
 from .tracking import IndicatorTracking, ActionPlan, Evidence
+from .company_employee import CompanyEmployee

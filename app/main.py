@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.core.security.dependencies import get_current_user
@@ -19,6 +20,20 @@ from app.db.session import get_db
 app = FastAPI(
     title="Plataforma de Evaluación de Productividad",
     version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:3000",
+        "https://www.impresistem.com",
+        "https://impresistem.com",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(users_router, dependencies=[Depends(get_current_user)])

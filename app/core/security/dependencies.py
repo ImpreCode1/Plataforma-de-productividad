@@ -4,12 +4,9 @@ from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
 from app.models.user import User
+from app.models.company_employee import CompanyEmployee
 from app.core.security.jwt_validation import validate_jwt
 
-
-# ---------------------------------------------------------
-# Database Dependency
-# ---------------------------------------------------------
 
 def get_db():
     db = SessionLocal()
@@ -22,27 +19,20 @@ def get_db():
 DBSession = Annotated[Session, Depends(get_db)]
 
 
-# ---------------------------------------------------------
-# Current Authenticated User
-# ---------------------------------------------------------
-
 def get_current_user(
     request: Request,
     db: DBSession,
     hydra_access: str | None = Cookie(default=None),
 ) -> User:
     
-    # 1️⃣ Verificar existencia del token
     if not hydra_access:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="No autenticado",
         )
 
-    # 2️⃣ Validar JWT emitido por Hydra
     payload = validate_jwt(hydra_access)
 
-    # 3️⃣ Extraer identificador externo
     external_auth_id = payload.get("sub")
 
     if not external_auth_id:
@@ -51,7 +41,6 @@ def get_current_user(
             detail="Token sin identificador válido",
         )
 
-    # 4️⃣ Buscar usuario interno
     user = (
         db.query(User)
         .filter(User.external_auth_id == external_auth_id)
@@ -59,32 +48,51 @@ def get_current_user(
     )
 
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Usuario no registrado en la plataforma",
+        email = payload.get("email")
+        
+        employee = (
+            db.query(CompanyEmployee)
+            .filter(CompanyEmployee.email == email)
+            .first()
         )
+        
+        if not employee:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tienes acceso a la plataforma. Contacta al administrador.",
+            )
+        
+        if not employee.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Tu cuenta está desactivada. Contacta al administrador.",
+            )
+        
+        user = User(
+            external_auth_id=external_auth_id,
+            name=payload.get("name", employee.name),
+            email=email,
+            position_id=employee.position_id,
+            is_active=True,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
 
-    # 5️⃣ Validar usuario activo
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Usuario inactivo",
         )
 
-    # 6️⃣ Guardar información en request state (útil para auditoría)
     request.state.user = user
     request.state.jwt_payload = payload
 
     return user
 
 
-# Alias tipado para usar en endpoints
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
-
-# ---------------------------------------------------------
-# RBAC - Role Based Access Control
-# ---------------------------------------------------------
 
 def require_roles(*allowed_roles: str):
 
