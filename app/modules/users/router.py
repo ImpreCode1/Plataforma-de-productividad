@@ -40,6 +40,22 @@ def list_users(
 
 
 # ------------------------------------------------
+# Get current user (me)
+# ------------------------------------------------
+
+@router.get(
+    "/me",
+    response_model=UserResponse
+)
+def get_current_user_me(
+    db: DBSession,
+    current_user: CurrentUser
+):
+
+    return service.get_user_with_roles(db, current_user.id)
+
+
+# ------------------------------------------------
 # Get user detail
 # ------------------------------------------------
 
@@ -53,7 +69,7 @@ def get_user(
     current_user: CurrentUser
 ):
 
-    return service.get_user(db, user_id)
+    return service.get_user_with_roles(db, user_id)
 
 
 # ------------------------------------------------

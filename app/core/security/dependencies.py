@@ -1,10 +1,10 @@
 from typing import Annotated
-from fastapi import Depends, HTTPException, status, Request, Cookie
+from fastapi import Depends, HTTPException, status, Request, Cookie, Header
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
 from app.models.user import User
-from app.models.company_employee import CompanyEmployee
+from app.models.role import UserRole
 from app.core.security.jwt_validation import validate_jwt
 
 
@@ -23,16 +23,27 @@ def get_current_user(
     request: Request,
     db: DBSession,
     hydra_access: str | None = Cookie(default=None),
+    x_access_token: str | None = Header(default=None, alias="X-Access-Token"),
+    x_access_token_lower: str | None = Header(default=None, alias="x-access-token"),
 ) -> User:
     
-    if not hydra_access:
+    token = hydra_access or x_access_token or x_access_token_lower
+    
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="No autenticado",
         )
 
-    payload = validate_jwt(hydra_access)
+    payload = validate_jwt(token)
+    
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No autenticado",
+        )
 
+    payload = validate_jwt(token)
     external_auth_id = payload.get("sub")
 
     if not external_auth_id:
@@ -49,30 +60,12 @@ def get_current_user(
 
     if not user:
         email = payload.get("email")
-        
-        employee = (
-            db.query(CompanyEmployee)
-            .filter(CompanyEmployee.email == email)
-            .first()
-        )
-        
-        if not employee:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="No tienes acceso a la plataforma. Contacta al administrador.",
-            )
-        
-        if not employee.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Tu cuenta está desactivada. Contacta al administrador.",
-            )
+        name = payload.get("name")
         
         user = User(
             external_auth_id=external_auth_id,
-            name=payload.get("name", employee.name),
+            name=name or "Usuario",
             email=email,
-            position_id=employee.position_id,
             is_active=True,
         )
         db.add(user)
@@ -100,7 +93,7 @@ def require_roles(*allowed_roles: str):
         current_user: CurrentUser,
     ) -> User:
 
-        user_roles = [role.name for role in current_user.roles]
+        user_roles = [ur.role.name for ur in current_user.user_roles] if hasattr(current_user, 'user_roles') else []
 
         if not any(role in allowed_roles for role in user_roles):
             raise HTTPException(

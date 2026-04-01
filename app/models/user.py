@@ -44,8 +44,8 @@ class User(Base):
     position = relationship("Position")
     leader = relationship("User", remote_side=[id])
 
-    roles: Mapped[list["Role"]] = relationship(
-        "Role",
-        secondary="user_roles",
-        back_populates="users",
+    user_roles = relationship(
+        "UserRole",
+        back_populates="user",
+        cascade="all, delete-orphan"
     )

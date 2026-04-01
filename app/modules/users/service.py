@@ -1,10 +1,10 @@
 from typing import cast
 from uuid import UUID
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException, status
 
 from app.models.user import User
-from app.models.role import Role
+from app.models.role import Role, UserRole
 
 
 # ------------------------------------------------
@@ -13,7 +13,7 @@ from app.models.role import Role
 
 def list_users(db: Session):
 
-    users = db.query(User).all()
+    users = db.query(User).options(joinedload(User.user_roles).joinedload(UserRole.role)).all()
 
     return users
 
@@ -25,6 +25,21 @@ def list_users(db: Session):
 def get_user(db: Session, user_id: UUID):
 
     user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado",
+        )
+
+    return user
+
+
+def get_user_with_roles(db: Session, user_id: UUID):
+
+    user = db.query(User).options(
+        joinedload(User.user_roles).joinedload(UserRole.role)
+    ).filter(User.id == user_id).first()
 
     if not user:
         raise HTTPException(

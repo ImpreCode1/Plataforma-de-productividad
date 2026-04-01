@@ -23,7 +23,7 @@ class Role(Base):
 
     description: Mapped[str | None] = mapped_column(String(255))
 
-    users = relationship(
+    user_roles = relationship(
         "UserRole",
         back_populates="role",
         cascade="all, delete-orphan"
@@ -49,5 +49,5 @@ class UserRole(Base):
         primary_key=True
     )
 
-    user = relationship("User", back_populates="roles")
-    role = relationship("Role", back_populates="users")
+    user = relationship("User", back_populates="user_roles")
+    role = relationship("Role", back_populates="user_roles")

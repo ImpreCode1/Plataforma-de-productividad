@@ -118,4 +118,15 @@ class Evidence(Base):
         server_default=func.now()
     )
 
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    reviewed_by: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id"),
+        nullable=True
+    )
+    reviewed_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True
+    )
+
     tracking = relationship("IndicatorTracking", back_populates="evidences")

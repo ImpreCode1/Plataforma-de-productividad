@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, model_serializer
 from uuid import UUID
 from typing import List, Optional
 
@@ -21,7 +21,20 @@ class UserBase(BaseModel):
 # -----------------------------
 
 class UserResponse(UserBase):
-    roles: List[str]
+    roles: List[str] = []
+
+    @model_serializer(mode='wrap')
+    def serialize_roles(self, handler):
+        data = handler(self)
+        if hasattr(self, 'user_roles'):
+            roles = []
+            for ur in self.user_roles:
+                if hasattr(ur, 'role') and ur.role:
+                    roles.append(ur.role.name)
+                elif hasattr(ur, 'name'):
+                    roles.append(ur.name)
+            data['roles'] = roles
+        return data
 
     class Config:
         from_attributes = True
