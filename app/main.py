@@ -37,7 +37,7 @@ app.add_middleware(
 )
 
 app.include_router(users_router, dependencies=[Depends(get_current_user)])
-app.include_router(positions_router, dependencies=[Depends(get_current_user)])
+app.include_router(positions_router)
 app.include_router(organizations_router, dependencies=[Depends(get_current_user)])
 app.include_router(indicators_router, dependencies=[Depends(get_current_user)])
 app.include_router(position_indicators_router, dependencies=[Depends(get_current_user)])
@@ -45,7 +45,7 @@ app.include_router(indicator_tracking_router, dependencies=[Depends(get_current_
 app.include_router(evidence_router, dependencies=[Depends(get_current_user)])
 app.include_router(action_plan_router, dependencies=[Depends(get_current_user)])
 app.include_router(dashboard_router, dependencies=[Depends(get_current_user)])
-app.include_router(roles_router, dependencies=[Depends(get_current_user)])
+app.include_router(roles_router)
 
 
 @app.get("/")

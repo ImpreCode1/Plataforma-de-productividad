@@ -1,6 +1,6 @@
 from typing import Annotated
 from fastapi import Depends, HTTPException, status, Request, Cookie, Header
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import SessionLocal
 from app.models.user import User
@@ -36,14 +36,6 @@ def get_current_user(
         )
 
     payload = validate_jwt(token)
-    
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="No autenticado",
-        )
-
-    payload = validate_jwt(token)
     external_auth_id = payload.get("sub")
 
     if not external_auth_id:
@@ -54,6 +46,7 @@ def get_current_user(
 
     user = (
         db.query(User)
+        .options(selectinload(User.user_roles).selectinload(UserRole.role))
         .filter(User.external_auth_id == external_auth_id)
         .first()
     )
@@ -71,6 +64,13 @@ def get_current_user(
         db.add(user)
         db.commit()
         db.refresh(user)
+        
+        user = (
+            db.query(User)
+            .options(selectinload(User.user_roles).selectinload(UserRole.role))
+            .filter(User.external_auth_id == external_auth_id)
+            .first()
+        )
 
     if not user.is_active:
         raise HTTPException(

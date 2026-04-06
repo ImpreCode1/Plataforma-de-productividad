@@ -17,24 +17,25 @@ class UserBase(BaseModel):
 
 
 # -----------------------------
-# Response
+# Position Response
+# -----------------------------
+
+class PositionResponse(BaseModel):
+    id: UUID
+    name: str
+
+    class Config:
+        from_attributes = True
+
+
+# -----------------------------
+# User Response
 # -----------------------------
 
 class UserResponse(UserBase):
     roles: List[str] = []
-
-    @model_serializer(mode='wrap')
-    def serialize_roles(self, handler):
-        data = handler(self)
-        if hasattr(self, 'user_roles'):
-            roles = []
-            for ur in self.user_roles:
-                if hasattr(ur, 'role') and ur.role:
-                    roles.append(ur.role.name)
-                elif hasattr(ur, 'name'):
-                    roles.append(ur.name)
-            data['roles'] = roles
-        return data
+    position: Optional[PositionResponse] = None
+    leader_name: Optional[str] = None
 
     class Config:
         from_attributes = True
