@@ -1,35 +1,40 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
 from uuid import UUID
+from fastapi import APIRouter, Depends
 
-from app.db.session import get_db
-from app.core.security.dependencies import CurrentUser
-from app.modules.dashboard.service import DashboardService
+from app.core.security.dependencies import DBSession, CurrentUser, require_roles
+from app.modules.dashboard import service
+from app.modules.dashboard.schemas import DashboardResponse, TeamDashboardResponse
 
-router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
+router = APIRouter(
+    prefix="/dashboard",
+    tags=["Dashboard"]
+)
 
 
-@router.get("/user")
-def user_dashboard(
-    current_user: CurrentUser,
-    month: int,
-    db: Session = Depends(get_db)
+# ------------------------------------------------
+# USER DASHBOARD
+# ------------------------------------------------
+
+@router.get(
+    "/user/{user_id}",
+    response_model=DashboardResponse
+)
+def get_user_dashboard(
+    user_id: UUID,
+    year: int,
+    db: DBSession,
+    current_user: CurrentUser
 ):
-    return DashboardService.user_dashboard(db, current_user.id, month)
+    return service.get_dashboard_by_user(db, user_id, year)
 
-
-@router.get("/leader")
-def leader_dashboard(
-    current_user: CurrentUser,
-    month: int,
-    db: Session = Depends(get_db)
+@router.get(
+    "/team",
+    response_model=TeamDashboardResponse,
+    dependencies=[Depends(require_roles("LEADER", "ADMIN"))]
+)
+def get_team_dashboard(
+    year: int,
+    db: DBSession,
+    current_user: CurrentUser
 ):
-    return DashboardService.leader_dashboard(db, current_user.id, month)
-
-
-@router.get("/organization")
-def organization_dashboard(
-    month: int,
-    db: Session = Depends(get_db)
-):
-    return DashboardService.organization_dashboard(db, month)
+    return service.get_team_dashboard(db, current_user.id, year)

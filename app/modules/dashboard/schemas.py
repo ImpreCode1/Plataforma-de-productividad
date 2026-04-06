@@ -1,44 +1,36 @@
 from uuid import UUID
 from pydantic import BaseModel
+from typing import List, Optional
+from decimal import Decimal
+
+
+class MonthData(BaseModel):
+    month: int
+    achieved_value: Optional[Decimal]
+    achievement_percentage: Optional[Decimal]
+    status: Optional[str]
+    is_closed: bool
 
 
 class IndicatorDashboard(BaseModel):
-
     indicator_name: str
-    target: float
-    achieved: float
-    achievement_percentage: float
-    status: str
-    
-class UserIndicatorDashboard(BaseModel):
-
-    indicator_id: UUID
-    indicator_name: str
-
-    target_value: float
-    achieved_value: float
-
-    achievement_percentage: float
-    weighted_score: float
-
-    status: str
+    target_value: Decimal
+    weight: Decimal
+    months: List[MonthData]
 
 
-class LeaderTeamIndicator(BaseModel):
-
+class DashboardResponse(BaseModel):
     user_id: UUID
-    user_name: str
+    year: int
+    indicators: List[IndicatorDashboard]
+    
+class UserDashboard(BaseModel):
+    user_id: UUID
+    name: str
+    indicators: list
 
-    indicator_name: str
 
-    achievement_percentage: float
-    status: str
-
-
-class OrganizationIndicatorSummary(BaseModel):
-
-    indicator_name: str
-
-    avg_achievement: float
-    indicators_met: int
-    indicators_not_met: int
+class TeamDashboardResponse(BaseModel):
+    leader_id: UUID
+    year: int
+    team: list[UserDashboard]

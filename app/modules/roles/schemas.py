@@ -1,24 +1,28 @@
-from pydantic import BaseModel
 from uuid import UUID
-
-
-class RoleCreate(BaseModel):
-
-    name: str
-    description: str
-
-
-class RoleUpdate(BaseModel):
-
-    name: str
-    description: str
+from pydantic import BaseModel
+from typing import List
 
 
 class RoleResponse(BaseModel):
-
     id: UUID
     name: str
-    description: str
 
     class Config:
         from_attributes = True
+
+
+class RoleListResponse(BaseModel):
+    roles: List[RoleResponse]
+
+
+class CreateRoleRequest(BaseModel):
+    name: str
+
+
+class UpdateRoleRequest(BaseModel):
+    name: str
+
+
+# 🔥 CLAVE
+class AssignRolesRequest(BaseModel):
+    role_ids: List[UUID]

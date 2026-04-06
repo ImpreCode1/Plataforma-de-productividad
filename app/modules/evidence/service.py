@@ -1,98 +1,104 @@
-from sqlalchemy.orm import Session
-from app.models import Evidence
+import os
+import uuid
 from datetime import datetime
-from uuid import UUID
-from fastapi import HTTPException, status
+from fastapi import HTTPException, UploadFile
+from sqlalchemy.orm import Session
+
+from app.models.evidence import Evidence
+from app.models.tracking import IndicatorTracking
 
 
-class EvidenceService:
+UPLOAD_DIR = "app/uploads/evidences"
 
-    @staticmethod
-    def create_evidence(db: Session, data, user_id):
 
-        evidence = Evidence(
-            indicator_tracking_id=data.indicator_tracking_id,
-            file_path=data.file_path,
-            uploaded_by=user_id,
-            status="pending"
-        )
+# ------------------------------------------------
+# SAVE FILE 🔥
+# ------------------------------------------------
 
-        db.add(evidence)
-        db.commit()
-        db.refresh(evidence)
+def save_file(file: UploadFile) -> str:
 
-        return evidence
+    # Validar tipo
+    allowed_types = ["application/pdf", "image/png", "image/jpeg"]
 
-    @staticmethod
-    def list_evidences(db: Session):
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Invalid file type")
 
-        return db.query(Evidence).all()
+    # Generar nombre único
+    extension = file.filename.split(".")[-1]
+    filename = f"{uuid.uuid4()}.{extension}"
 
-    @staticmethod
-    def get_evidence(db: Session, evidence_id: UUID):
+    file_path = f"/uploads/evidences/{filename}"
+    full_path = os.path.join(UPLOAD_DIR, filename)
 
-        return db.query(Evidence).filter(
-            Evidence.id == evidence_id
-        ).first()
+    with open(full_path, "wb") as buffer:
+        buffer.write(file.file.read())
 
-    @staticmethod
-    def list_user_evidences(db: Session, user_id: UUID):
-        from app.models import IndicatorTracking
-        return db.query(Evidence).join(
-            IndicatorTracking
-        ).filter(
-            IndicatorTracking.user_id == user_id
-        ).all()
+    # Guardar archivo
+    with open(file_path, "wb") as buffer:
+        buffer.write(file.file.read())
 
-    @staticmethod
-    def list_team_evidences(db: Session, leader_id: UUID):
-        from app.models import User, IndicatorTracking
-        return db.query(Evidence).join(
-            IndicatorTracking
-        ).join(
-            User, IndicatorTracking.user_id == User.id
-        ).filter(
-            User.leader_id == leader_id,
-            Evidence.status == "pending"
-        ).all()
+    return file_path
 
-    @staticmethod
-    def review_evidence(db: Session, evidence_id: UUID, reviewer_id: UUID, status_review: str):
-        
-        evidence = db.query(Evidence).filter(
-            Evidence.id == evidence_id
-        ).first()
 
-        if not evidence:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Evidencia no encontrada"
-            )
+# ------------------------------------------------
+# CREATE EVIDENCE
+# ------------------------------------------------
 
-        if evidence.status != "pending":
-            raise HTTPException(
-                status_code=status.HTTP_400_NOT_FOUND,
-                detail="Evidencia ya ha sido revisada"
-            )
+def create_evidence(db: Session, tracking_id, file: UploadFile, user_id):
 
-        evidence.status = status_review
-        evidence.reviewed_by = reviewer_id
-        evidence.reviewed_at = datetime.utcnow()
+    tracking = db.query(IndicatorTracking).filter(
+        IndicatorTracking.id == tracking_id
+    ).first()
 
-        db.commit()
-        db.refresh(evidence)
+    if not tracking:
+        raise HTTPException(status_code=404, detail="Tracking not found")
 
-        return evidence
+    if tracking.is_closed:
+        raise HTTPException(status_code=400, detail="Tracking is closed")
 
-    @staticmethod
-    def delete_evidence(db: Session, evidence_id: UUID):
+    file_path = save_file(file)
 
-        evidence = db.query(Evidence).filter(
-            Evidence.id == evidence_id
-        ).first()
+    evidence = Evidence(
+        tracking_id=tracking_id,
+        file_path=file_path,
+        uploaded_by=user_id,
+        uploaded_at=datetime.utcnow()
+    )
 
-        if evidence:
-            db.delete(evidence)
-            db.commit()
+    db.add(evidence)
+    db.commit()
+    db.refresh(evidence)
 
-        return evidence
+    return evidence
+
+
+# ------------------------------------------------
+# LIST EVIDENCE
+# ------------------------------------------------
+
+def list_evidence(db: Session, tracking_id):
+
+    return db.query(Evidence).filter(
+        Evidence.tracking_id == tracking_id
+    ).all()
+
+
+# ------------------------------------------------
+# DELETE EVIDENCE
+# ------------------------------------------------
+
+def delete_evidence(db: Session, evidence_id):
+
+    evidence = db.query(Evidence).filter(
+        Evidence.id == evidence_id
+    ).first()
+
+    if not evidence:
+        raise HTTPException(status_code=404, detail="Evidence not found")
+
+    # Eliminar archivo físico
+    if os.path.exists(evidence.file_path):
+        os.remove(evidence.file_path)
+
+    db.delete(evidence)
+    db.commit()

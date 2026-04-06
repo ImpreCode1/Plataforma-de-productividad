@@ -1,11 +1,10 @@
-from typing import cast
+from sqlalchemy.orm import Session
 from uuid import UUID
-from sqlalchemy.orm import Session, selectinload
-from fastapi import HTTPException, status
+from fastapi import HTTPException
+import pandas as pd
 
 from app.models.user import User
 from app.models.role import Role, UserRole
-from app.modules.users.schemas import UserResponse
 
 
 # ------------------------------------------------
@@ -13,115 +12,32 @@ from app.modules.users.schemas import UserResponse
 # ------------------------------------------------
 
 def list_users(db: Session):
-
-    users = db.query(User).options(
-        selectinload(User.user_roles).selectinload(UserRole.role),
-        selectinload(User.position),
-        selectinload(User.leader)
-    ).all()
-
-    return [
-        UserResponse(
-            id=user.id,
-            name=user.name,
-            email=user.email,
-            is_active=user.is_active,
-            position_id=user.position_id,
-            leader_id=user.leader_id,
-            roles=[ur.role.name for ur in user.user_roles],  # 🔥 FIX
-            position=user.position,
-            leader_name=user.leader.name if user.leader else None
-        )
-        for user in users
-    ]
+    return db.query(User).all()
 
 
 # ------------------------------------------------
-# Get user
+# Get user with roles
 # ------------------------------------------------
 
-def get_user(db: Session, user_id: UUID):
-
+def get_user_with_roles(db: Session, user_id: UUID):
     user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuario no encontrado",
-        )
+        raise HTTPException(status_code=404, detail="User not found")
 
     return user
 
-
-def get_user_with_roles(db: Session, user_id: UUID):
-
-    user = db.query(User).options(
-        selectinload(User.user_roles).selectinload(UserRole.role),
-        selectinload(User.position),
-        selectinload(User.leader)
-    ).filter(User.id == user_id).first()
-
-    if not user:
-        raise HTTPException(
-            status_code=404,
-            detail="Usuario no encontrado",
-        )
-
-    return UserResponse(
-        id=user.id,
-        name=user.name,
-        email=user.email,
-        is_active=user.is_active,
-        position_id=user.position_id,
-        leader_id=user.leader_id,
-        roles=[ur.role.name for ur in user.user_roles],  # 🔥 AQUÍ ESTÁ LA CLAVE
-        position=user.position,
-        leader_name=user.leader.name if user.leader else None
-    )
 
 # ------------------------------------------------
 # Change status
 # ------------------------------------------------
 
 def change_status(db: Session, user_id: UUID, is_active: bool):
-
-    user = get_user(db, user_id)
+    user = get_user_with_roles(db, user_id)
 
     user.is_active = is_active
-
     db.commit()
     db.refresh(user)
-
-    user = db.query(User).options(
-        selectinload(User.user_roles).selectinload(UserRole.role),
-        selectinload(User.position),
-        selectinload(User.leader)
-    ).filter(User.id == user_id).first()
-
-    return user
-
-
-# ------------------------------------------------
-# Assign roles
-# ------------------------------------------------
-
-def assign_roles(db: Session, user_id: UUID, role_ids: list[UUID]):
-
-    user = get_user(db, user_id)
-
-    db.query(UserRole).filter(UserRole.user_id == user_id).delete()
-    
-    for role_id in role_ids:
-        user_role = UserRole(user_id=user_id, role_id=role_id)
-        db.add(user_role)
-    
-    db.commit()
-    
-    user = db.query(User).options(
-        selectinload(User.user_roles).selectinload(UserRole.role),
-        selectinload(User.position),
-        selectinload(User.leader)
-    ).filter(User.id == user_id).first()
 
     return user
 
@@ -131,50 +47,85 @@ def assign_roles(db: Session, user_id: UUID, role_ids: list[UUID]):
 # ------------------------------------------------
 
 def assign_leader(db: Session, user_id: UUID, leader_id: UUID | None):
-
-    user = get_user(db, user_id)
+    user = get_user_with_roles(db, user_id)
 
     if leader_id:
-
         leader = db.query(User).filter(User.id == leader_id).first()
-
         if not leader:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Líder no encontrado",
-            )
+            raise HTTPException(status_code=404, detail="Leader not found")
 
     user.leader_id = leader_id
 
     db.commit()
     db.refresh(user)
 
-    user = db.query(User).options(
-        selectinload(User.user_roles).selectinload(UserRole.role),
-        selectinload(User.position),
-        selectinload(User.leader)
-    ).filter(User.id == user_id).first()
-
     return user
 
 
 # ------------------------------------------------
-# Change position
+# IMPORT EXCEL 🔥
 # ------------------------------------------------
 
-def change_position(db: Session, user_id: UUID, position_id: UUID | None):
+def import_users_from_excel(db: Session, file):
 
-    user = get_user(db, user_id)
+    df = pd.read_excel(file)
 
-    user.position_id = position_id
+    created = 0
+    updated = 0
+
+    users_dict = {}
+
+    # Primera pasada: crear usuarios
+    for _, row in df.iterrows():
+
+        email = row["EMAIL"]
+
+        user = db.query(User).filter(User.email == email).first()
+
+        if not user:
+            user = User(
+                document_number=str(row["C.C. No."]),
+                name=row["NOMBRE COLABORADOR"],
+                email=email,
+                position_name=row.get("CARGO"),
+                area=row.get("AREA (VP)"),
+                subarea=row.get("SUBAREA (División)"),
+            )
+            db.add(user)
+            created += 1
+        else:
+            user.name = row["NOMBRE COLABORADOR"]
+            user.position_name = row.get("CARGO")
+            user.area = row.get("AREA (VP)")
+            user.subarea = row.get("SUBAREA (División)")
+            updated += 1
+
+        users_dict[user.name] = user
 
     db.commit()
-    db.refresh(user)
 
-    user = db.query(User).options(
-        selectinload(User.user_roles).selectinload(UserRole.role),
-        selectinload(User.position),
-        selectinload(User.leader)
-    ).filter(User.id == user_id).first()
+    # Segunda pasada: asignar líderes
+    for _, row in df.iterrows():
+        user = users_dict.get(row["NOMBRE COLABORADOR"])
+        leader_name = row.get("JEFE DIRECTO")
+
+        if leader_name and leader_name in users_dict:
+            user.leader_id = users_dict[leader_name].id
+
+    db.commit()
+
+    return {
+        "created": created,
+        "updated": updated 
+    }
+    
+def get_user_with_roles(db: Session, user_id: UUID):
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # 🔥 CLAVE
+    user.roles = [ur.role for ur in user.roles]
 
     return user

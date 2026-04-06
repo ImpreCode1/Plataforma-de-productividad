@@ -1,58 +1,76 @@
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
 from uuid import UUID
+from fastapi import APIRouter, Depends
 
-from app.db.session import get_db
+from app.core.security.dependencies import DBSession, CurrentUser, require_roles
+from app.modules.indicator_tracking import service
 from app.modules.indicator_tracking.schemas import (
-    IndicatorTrackingCreate,
-    IndicatorTrackingUpdate,
-    IndicatorTrackingResponse
+    IndicatorTrackingResponse,
+    TrackingUpdateRequest
 )
 
-from app.modules.indicator_tracking.service import IndicatorTrackingService
-
-router = APIRouter(prefix="/indicator-tracking", tags=["Indicator Tracking"])
-
-
-@router.post("/", response_model=IndicatorTrackingResponse)
-def create_tracking(data: IndicatorTrackingCreate, db: Session = Depends(get_db)):
-
-    return IndicatorTrackingService.create_tracking(db, data)
+router = APIRouter(
+    prefix="/tracking",
+    tags=["Indicator Tracking"]
+)
 
 
-@router.get("/", response_model=list[IndicatorTrackingResponse])
-def list_tracking(
-    user_id: UUID | None = Query(None),
-    month: int | None = Query(None),
-    year: int | None = Query(None),
-    position_indicator_id: UUID | None = Query(None),
-    db: Session = Depends(get_db)
+# ------------------------------------------------
+# GET TRACKING BY USER
+# ------------------------------------------------
+
+@router.get("/")
+def get_tracking(
+    user_id: UUID,
+    year: int,
+    db: DBSession,
+    current_user: CurrentUser
 ):
+    data = service.get_tracking_by_user(db, user_id, year)
+    return {"tracking": data}
 
-    return IndicatorTrackingService.list_tracking(
-        db,
-        user_id,
-        month,
-        year,
-        position_indicator_id
-    )
 
+# ------------------------------------------------
+# GET ONE
+# ------------------------------------------------
 
 @router.get("/{tracking_id}", response_model=IndicatorTrackingResponse)
-def get_tracking(tracking_id: UUID, db: Session = Depends(get_db)):
+def get_one(
+    tracking_id: UUID,
+    db: DBSession,
+    current_user: CurrentUser
+):
+    return service.get_tracking(db, tracking_id)
 
-    return IndicatorTrackingService.get_tracking(db, tracking_id)
 
+# ------------------------------------------------
+# UPDATE (USER REPORT)
+# ------------------------------------------------
 
-@router.patch("/{tracking_id}", response_model=IndicatorTrackingResponse)
+@router.patch(
+    "/{tracking_id}",
+    response_model=IndicatorTrackingResponse
+)
 def update_tracking(
     tracking_id: UUID,
-    data: IndicatorTrackingUpdate,
-    db: Session = Depends(get_db)
+    data: TrackingUpdateRequest,
+    db: DBSession,
+    current_user: CurrentUser
 ):
+    return service.update_tracking(db, tracking_id, data.achieved_value)
 
-    return IndicatorTrackingService.update_tracking(
-        db,
-        tracking_id,
-        data.achieved_value
-    )
+
+# ------------------------------------------------
+# CLOSE (LEADER)
+# ------------------------------------------------
+
+@router.patch(
+    "/{tracking_id}/close",
+    response_model=IndicatorTrackingResponse,
+    dependencies=[Depends(require_roles("LEADER", "ADMIN"))]
+)
+def close_tracking(
+    tracking_id: UUID,
+    db: DBSession,
+    current_user: CurrentUser
+):
+    return service.close_tracking(db, tracking_id)

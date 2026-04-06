@@ -1,10 +1,15 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
 from uuid import UUID
+from fastapi import APIRouter, Depends
 
-from app.db.session import get_db
-from app.modules.roles.schemas import RoleCreate, RoleUpdate, RoleResponse
+from app.core.security.dependencies import DBSession, CurrentUser, require_roles
 from app.modules.roles.service import RoleService
+from app.modules.roles.schemas import (
+    RoleResponse,
+    RoleListResponse,
+    CreateRoleRequest,
+    UpdateRoleRequest,
+    AssignRolesRequest
+)
 
 router = APIRouter(
     prefix="/roles",
@@ -12,35 +17,86 @@ router = APIRouter(
 )
 
 
-@router.get("/", response_model=list[RoleResponse])
-def list_roles(db: Session = Depends(get_db)):
+# ------------------------------------------------
+# LIST ROLES
+# ------------------------------------------------
 
-    return RoleService.list_roles(db)
+@router.get(
+    "/",
+    response_model=RoleListResponse,
+    dependencies=[Depends(require_roles("ADMIN"))]
+)
+def list_roles(
+    db: DBSession,
+    current_user: CurrentUser
+):
+    roles = RoleService.list_roles(db)
+    return {"roles": roles}
 
 
-@router.post("/", response_model=RoleResponse)
-def create_role(data: RoleCreate, db: Session = Depends(get_db)):
+# ------------------------------------------------
+# CREATE ROLE (opcional)
+# ------------------------------------------------
 
+@router.post(
+    "/",
+    response_model=RoleResponse,
+    dependencies=[Depends(require_roles("ADMIN"))]
+)
+def create_role(
+    data: CreateRoleRequest,
+    db: DBSession,
+    current_user: CurrentUser
+):
     return RoleService.create_role(db, data)
 
 
-@router.get("/{role_id}", response_model=RoleResponse)
-def get_role(role_id: UUID, db: Session = Depends(get_db)):
+# ------------------------------------------------
+# UPDATE ROLE
+# ------------------------------------------------
 
-    return RoleService.get_role(db, role_id)
-
-
-@router.patch("/{role_id}", response_model=RoleResponse)
+@router.patch(
+    "/{role_id}",
+    response_model=RoleResponse,
+    dependencies=[Depends(require_roles("ADMIN"))]
+)
 def update_role(
     role_id: UUID,
-    data: RoleUpdate,
-    db: Session = Depends(get_db)
+    data: UpdateRoleRequest,
+    db: DBSession,
+    current_user: CurrentUser
 ):
-
     return RoleService.update_role(db, role_id, data)
 
 
-@router.delete("/{role_id}")
-def delete_role(role_id: UUID, db: Session = Depends(get_db)):
+# ------------------------------------------------
+# DELETE ROLE
+# ------------------------------------------------
 
+@router.delete(
+    "/{role_id}",
+    dependencies=[Depends(require_roles("ADMIN"))]
+)
+def delete_role(
+    role_id: UUID,
+    db: DBSession,
+    current_user: CurrentUser
+):
     return RoleService.delete_role(db, role_id)
+
+
+# ------------------------------------------------
+# 🔥 ASSIGN ROLES A USER
+# ------------------------------------------------
+
+@router.patch(
+    "/users/{user_id}",
+    dependencies=[Depends(require_roles("ADMIN"))]
+)
+def assign_roles(
+    user_id: UUID,
+    data: AssignRolesRequest,
+    db: DBSession,
+    current_user: CurrentUser
+):
+    return RoleService.assign_roles(db, user_id, data.role_ids)

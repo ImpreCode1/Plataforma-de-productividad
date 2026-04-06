@@ -1,22 +1,21 @@
-from pydantic import BaseModel
 from uuid import UUID
+from pydantic import BaseModel
 from datetime import datetime
 
 
 class ActionPlanCreate(BaseModel):
-    indicator_tracking_id: UUID
     reason_not_met: str
     action_plan: str
 
 
 class ActionPlanUpdate(BaseModel):
-    reason_not_met: str
-    action_plan: str
+    reason_not_met: str | None = None
+    action_plan: str | None = None
 
 
 class ActionPlanResponse(BaseModel):
     id: UUID
-    indicator_tracking_id: UUID
+    tracking_id: UUID
     reason_not_met: str
     action_plan: str
     created_by: UUID

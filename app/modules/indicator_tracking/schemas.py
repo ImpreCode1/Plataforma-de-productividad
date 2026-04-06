@@ -1,30 +1,40 @@
-from pydantic import BaseModel
 from uuid import UUID
-from datetime import datetime
+from pydantic import BaseModel
+from typing import Optional
+from decimal import Decimal
 
 
-class IndicatorTrackingCreate(BaseModel):
-    user_id: UUID
-    position_indicator_id: UUID
-    month: int
-    achieved_value: float
-
-
-class IndicatorTrackingUpdate(BaseModel):
-    achieved_value: float
-
+# -----------------------------
+# RESPONSE
+# -----------------------------
 
 class IndicatorTrackingResponse(BaseModel):
     id: UUID
     user_id: UUID
-    position_indicator_id: UUID
+    assignment_id: UUID
+
+    year: int
     month: int
-    achieved_value: float
-    achievement_percentage: float
-    weighted_score: float
-    target_met: bool
-    status: str
-    created_at: datetime
+
+    achieved_value: Optional[Decimal]
+    achievement_percentage: Optional[Decimal]
+    weighted_score: Optional[Decimal]
+
+    target_met: Optional[bool]
+    status: Optional[str]
+    is_closed: bool
 
     class Config:
-        orm_mode = True
+        from_attributes = True
+
+
+# -----------------------------
+# REQUESTS
+# -----------------------------
+
+class TrackingUpdateRequest(BaseModel):
+    achieved_value: Decimal
+
+
+class TrackingCloseRequest(BaseModel):
+    pass

@@ -2,22 +2,39 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from fastapi.staticfiles import StaticFiles
+
 from app.core.security.dependencies import get_current_user
+from app.db.session import get_db, SessionLocal
+from app.db.seed import seed_roles  # 🔥 IMPORTANTE
 
 from app.modules.users.router import router as users_router
-from app.modules.indicator_assigments.router import router as indicators_router
+from app.modules.indicator_assignments.router import router as indicators_router
 from app.modules.indicator_tracking.router import router as indicator_tracking_router
 from app.modules.evidence.router import router as evidence_router
 from app.modules.action_plan.router import router as action_plan_router
 from app.modules.dashboard.router import router as dashboard_router
 from app.modules.roles.router import router as roles_router
 
-from app.db.session import get_db
 
 app = FastAPI(
     title="Plataforma de Evaluación de Productividad",
     version="1.0.0"
 )
+
+app.mount("/uploads", StaticFiles(directory="app/uploads"), name="uploads")
+
+
+# 🔥 SEEDER AUTOMÁTICO AL INICIAR
+@app.on_event("startup")
+def run_seed():
+    db = SessionLocal()
+    try:
+        seed_roles(db)
+        print("✅ Roles seed ejecutado")
+    finally:
+        db.close()
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -44,11 +61,9 @@ app.include_router(roles_router)
 
 @app.get("/")
 def HelloWorld():
-    try:
-        return{"API de Plataforma de Productividad Impresistem funcionando Correctamente"}
-    except Exception:
-        return{"API de Plataforma de Productividad Impresistem NO esta funcionando :()"}
-        
+    return {"message": "API de Plataforma de Productividad Impresistem funcionando correctamente"}
+
+
 @app.get("/health")
 def health(db: Session = Depends(get_db)):
     try:
@@ -63,4 +78,3 @@ def health(db: Session = Depends(get_db)):
             "database": "disconnected",
             "detail": str(e)
         }
-        

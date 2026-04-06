@@ -1,69 +1,60 @@
-from pydantic import BaseModel, EmailStr, model_serializer
 from uuid import UUID
+from datetime import date
+from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional
 
 
 # -----------------------------
-# Base
+# RESPONSE
 # -----------------------------
 
-class UserBase(BaseModel):
+class RoleOut(BaseModel):
     id: UUID
+    name: str
+
+    class Config:
+        from_attributes = True
+
+
+class UserResponse(BaseModel):
+    id: UUID
+    document_number: str
     name: str
     email: EmailStr
-    is_active: bool
-    position_id: Optional[UUID]
+
+    position_name: Optional[str]
+    area: Optional[str]
+    subarea: Optional[str]
+
+    hire_date: Optional[date]
+    contract_type: Optional[str]
+    salary_type: Optional[str]
+
     leader_id: Optional[UUID]
+    is_active: bool
 
-
-# -----------------------------
-# Position Response
-# -----------------------------
-
-class PositionResponse(BaseModel):
-    id: UUID
-    name: str
+    roles: List[RoleOut] = Field(default_factory=list)
 
     class Config:
         from_attributes = True
 
-
-# -----------------------------
-# User Response
-# -----------------------------
-
-class UserResponse(UserBase):
-    roles: List[str] = []
-    position: Optional[PositionResponse] = None
-    leader_name: Optional[str] = None
-
-    class Config:
-        from_attributes = True
-
-
-# -----------------------------
-# List Response
-# -----------------------------
 
 class UserListResponse(BaseModel):
     users: List[UserResponse]
 
 
 # -----------------------------
-# Requests
+# REQUESTS
 # -----------------------------
 
 class ChangeStatusRequest(BaseModel):
     is_active: bool
 
 
-class AssignRolesRequest(BaseModel):
-    role_ids: List[UUID]
-
-
 class AssignLeaderRequest(BaseModel):
     leader_id: Optional[UUID]
 
 
-class ChangePositionRequest(BaseModel):
-    position_id: Optional[UUID]
+class ImportExcelResponse(BaseModel):
+    created: int
+    updated: int

@@ -1,40 +1,57 @@
 from uuid import UUID
+from fastapi import APIRouter
 
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+from app.core.security.dependencies import DBSession, CurrentUser
+from app.modules.action_plan import service
+from app.modules.action_plan.schemas import (
+    ActionPlanCreate,
+    ActionPlanResponse,
+    ActionPlanUpdate
+)
 
-from app.db.session import get_db
-from app.modules.action_plan.schemas import ActionPlanCreate, ActionPlanResponse, ActionPlanUpdate
-from app.modules.action_plan.service import ActionPlanService
-
-router = APIRouter(prefix="/action-plans", tags=["Action Plans"])
-
-
-@router.post("/", response_model=ActionPlanResponse)
-def create_plan(data: ActionPlanCreate, db: Session = Depends(get_db)):
-
-    user_id = data.indicator_tracking_id
-
-    return ActionPlanService.create_plan(db, data, user_id)
+router = APIRouter(
+    prefix="/action-plan",
+    tags=["Action Plan"]
+)
 
 
-@router.get("/", response_model=list[ActionPlanResponse])
-def list_plans(db: Session = Depends(get_db)):
+# ------------------------------------------------
+# CREATE
+# ------------------------------------------------
 
-    return ActionPlanService.list_plans(db)
-
-
-@router.get("/{plan_id}", response_model=ActionPlanResponse)
-def get_plan(plan_id: UUID, db: Session = Depends(get_db)):
-
-    return ActionPlanService.get_plan(db, plan_id)
-
-
-@router.patch("/{plan_id}", response_model=ActionPlanResponse)
-def update_plan(
-    plan_id: UUID,
-    data: ActionPlanUpdate,
-    db: Session = Depends(get_db)
+@router.post("/{tracking_id}", response_model=ActionPlanResponse)
+def create_action_plan(
+    tracking_id: UUID,
+    data: ActionPlanCreate,
+    db: DBSession,
+    current_user: CurrentUser
 ):
+    return service.create_action_plan(db, tracking_id, data, current_user.id)
 
-    return ActionPlanService.update_plan(db, plan_id, data)
+
+# ------------------------------------------------
+# LIST
+# ------------------------------------------------
+
+@router.get("/{tracking_id}")
+def list_action_plans(
+    tracking_id: UUID,
+    db: DBSession,
+    current_user: CurrentUser
+):
+    data = service.list_action_plans(db, tracking_id)
+    return {"action_plans": data}
+
+
+# ------------------------------------------------
+# UPDATE
+# ------------------------------------------------
+
+@router.patch("/{action_plan_id}", response_model=ActionPlanResponse)
+def update_action_plan(
+    action_plan_id: UUID,
+    data: ActionPlanUpdate,
+    db: DBSession,
+    current_user: CurrentUser
+):
+    return service.update_action_plan(db, action_plan_id, data)
