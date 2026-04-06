@@ -1,36 +1,29 @@
 erDiagram
 
-    ORGANIZATION_UNIT {
-        uuid id PK
-        string name
-        string type
-        uuid parent_id FK
-        timestamp created_at
-    }
-
-    POSITION {
-        uuid id PK
-        string name
-        uuid organization_unit_id FK
-        timestamp created_at
-    }
-
     USER {
         uuid id PK
         string external_auth_id
+        string document_number
         string name
         string email
-        uuid position_id FK
+
+        string position_name
+        string area
+        string subarea
+
+        date hire_date
+        string contract_type
+        string salary_type
+
         uuid leader_id FK
+
         boolean is_active
         timestamp created_at
-        timestamp updated_at
     }
 
     ROLE {
         uuid id PK
         string name
-        string description
     }
 
     USER_ROLE {
@@ -38,67 +31,61 @@ erDiagram
         uuid role_id FK
     }
 
-    INDICATOR {
+    INDICATOR_ASSIGNMENT {
         uuid id PK
-        string name
-        string formula_text
-        string frequency
-        boolean is_active
-        timestamp created_at
-    }
-
-    POSITION_INDICATOR {
-        uuid id PK
-        uuid position_id FK
-        uuid indicator_id FK
+        uuid user_id FK
+        string indicator_name
         int year
         decimal target_value
         decimal weight
+        boolean is_active
+        timestamp created_at
     }
 
     INDICATOR_TRACKING {
         uuid id PK
         uuid user_id FK
-        uuid position_indicator_id FK
+        uuid assignment_id FK
+        int year
         int month
+
         decimal achieved_value
         decimal achievement_percentage
         decimal weighted_score
+
         boolean target_met
         string status
+        boolean is_closed
+
         timestamp created_at
+    }
+
+    EVIDENCE {
+        uuid id PK
+        uuid tracking_id FK
+        string file_path
+        uuid uploaded_by FK
+        timestamp uploaded_at
     }
 
     ACTION_PLAN {
         uuid id PK
-        uuid indicator_tracking_id FK
+        uuid tracking_id FK
         text reason_not_met
         text action_plan
         uuid created_by FK
         timestamp created_at
     }
 
-    EVIDENCE {
-        uuid id PK
-        uuid indicator_tracking_id FK
-        string file_path
-        uuid uploaded_by FK
-        timestamp uploaded_at
-    }
-
-    ORGANIZATION_UNIT ||--o{ ORGANIZATION_UNIT : parent_child
-    ORGANIZATION_UNIT ||--o{ POSITION : contains
-    POSITION ||--o{ USER : assigned
-    USER ||--o{ USER : leads
+    USER ||--o{ USER : leader
 
     USER ||--o{ USER_ROLE : has
     ROLE ||--o{ USER_ROLE : assigned
 
-    POSITION ||--o{ POSITION_INDICATOR : configures
-    INDICATOR ||--o{ POSITION_INDICATOR : applies
+    USER ||--o{ INDICATOR_ASSIGNMENT : has
+    INDICATOR_ASSIGNMENT ||--o{ INDICATOR_TRACKING : generates
 
     USER ||--o{ INDICATOR_TRACKING : records
-    POSITION_INDICATOR ||--o{ INDICATOR_TRACKING : tracks
 
-    INDICATOR_TRACKING ||--|| ACTION_PLAN : generates
-    INDICATOR_TRACKING ||--o{ EVIDENCE : supports
+    INDICATOR_TRACKING ||--o{ EVIDENCE : has
+    INDICATOR_TRACKING ||--o{ ACTION_PLAN : triggers

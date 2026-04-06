@@ -5,10 +5,7 @@ from sqlalchemy import text
 from app.core.security.dependencies import get_current_user
 
 from app.modules.users.router import router as users_router
-from app.modules.positions.router import router as positions_router
-from app.modules.organization_units.router import router as organizations_router
-from app.modules.indicators.router import router as indicators_router
-from app.modules.position_indicators.router import router as position_indicators_router
+from app.modules.indicator_assigments.router import router as indicators_router
 from app.modules.indicator_tracking.router import router as indicator_tracking_router
 from app.modules.evidence.router import router as evidence_router
 from app.modules.action_plan.router import router as action_plan_router
@@ -37,10 +34,7 @@ app.add_middleware(
 )
 
 app.include_router(users_router, dependencies=[Depends(get_current_user)])
-app.include_router(positions_router)
-app.include_router(organizations_router, dependencies=[Depends(get_current_user)])
 app.include_router(indicators_router, dependencies=[Depends(get_current_user)])
-app.include_router(position_indicators_router, dependencies=[Depends(get_current_user)])
 app.include_router(indicator_tracking_router, dependencies=[Depends(get_current_user)])
 app.include_router(evidence_router, dependencies=[Depends(get_current_user)])
 app.include_router(action_plan_router, dependencies=[Depends(get_current_user)])

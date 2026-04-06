@@ -1,132 +1,34 @@
-import uuid
-from sqlalchemy import Integer, Numeric, Boolean, String, ForeignKey, UniqueConstraint, Index
+from sqlalchemy import Column, Integer, Numeric, Boolean, String, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.sql import func
-from sqlalchemy import DateTime
+from sqlalchemy.orm import relationship
+import uuid
 
 from app.models.base import Base
 
 
 class IndicatorTracking(Base):
-    __tablename__ = "indicator_tracking"
+    __tablename__ = "indicator_trackings"
 
-    __table_args__ = (
-        UniqueConstraint("user_id", "position_indicator_id", "month"),
-        Index("ix_tracking_user", "user_id"),
-        Index("ix_tracking_position_indicator", "position_indicator_id"),
-    )
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4
-    )
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    assignment_id = Column(UUID(as_uuid=True), ForeignKey("indicator_assignments.id"), nullable=False)
 
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("users.id"),
-        nullable=False
-    )
+    year = Column(Integer, nullable=False)
+    month = Column(Integer, nullable=False)
 
-    position_indicator_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("position_indicators.id"),
-        nullable=False
-    )
+    achieved_value = Column(Numeric, nullable=True)
+    achievement_percentage = Column(Numeric, nullable=True)
+    weighted_score = Column(Numeric, nullable=True)
 
-    month: Mapped[int] = mapped_column(Integer, nullable=False)
+    target_met = Column(Boolean, nullable=True)
+    status = Column(String, nullable=True)
 
-    achieved_value: Mapped[float] = mapped_column(Numeric(12, 2))
-    achievement_percentage: Mapped[float] = mapped_column(Numeric(5, 2))
-    weighted_score: Mapped[float] = mapped_column(Numeric(6, 2))
+    is_closed = Column(Boolean, default=False)
 
-    target_met: Mapped[bool] = mapped_column(Boolean, default=False)
-    status: Mapped[str] = mapped_column(String(20), default="DRAFT")
+    # Relaciones
+    user = relationship("User", back_populates="trackings")
+    assignment = relationship("IndicatorAssignment", back_populates="trackings")
 
-    created_at: Mapped[DateTime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now()
-    )
-
-    user = relationship("User")
-    position_indicator = relationship("PositionIndicator")
-    action_plan = relationship("ActionPlan", back_populates="tracking", uselist=False)
-    evidences = relationship("Evidence", back_populates="tracking")
-
-
-class ActionPlan(Base):
-    __tablename__ = "action_plans"
-    __table_args__ = (
-        UniqueConstraint("indicator_tracking_id"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4
-    )
-
-    indicator_tracking_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("indicator_tracking.id"),
-        nullable=False
-    )
-
-    reason_not_met: Mapped[str] = mapped_column(String)
-    action_plan: Mapped[str] = mapped_column(String)
-
-    created_by: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("users.id"),
-        nullable=False
-    )
-
-    created_at: Mapped[DateTime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now()
-    )
-
-    tracking = relationship("IndicatorTracking", back_populates="action_plan")
-
-
-class Evidence(Base):
-    __tablename__ = "evidences"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4
-    )
-
-    indicator_tracking_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("indicator_tracking.id"),
-        nullable=False
-    )
-
-    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
-
-    uploaded_by: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("users.id"),
-        nullable=False
-    )
-
-    uploaded_at: Mapped[DateTime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now()
-    )
-
-    status: Mapped[str] = mapped_column(String(20), default="pending")
-    reviewed_by: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("users.id"),
-        nullable=True
-    )
-    reviewed_at: Mapped[DateTime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True
-    )
-
-    tracking = relationship("IndicatorTracking", back_populates="evidences")
+    evidences = relationship("Evidence", back_populates="tracking", cascade="all, delete-orphan")
+    action_plans = relationship("ActionPlan", back_populates="tracking", cascade="all, delete-orphan")

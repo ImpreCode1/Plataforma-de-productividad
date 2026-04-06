@@ -1,7 +1,7 @@
-from .organization import OrganizationUnit, Position
 from .user import User
 from .role import Role, UserRole
-from .indicator import Indicator, PositionIndicator
+from .indicator_assignment import IndicatorAssignment
 from .base import Base
-from .tracking import IndicatorTracking, ActionPlan, Evidence
-from .company_employee import CompanyEmployee
+from .tracking import IndicatorTracking
+from .evidence import Evidence
+

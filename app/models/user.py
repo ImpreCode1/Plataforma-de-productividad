@@ -1,51 +1,37 @@
-from typing import TYPE_CHECKING
-import uuid
-from sqlalchemy import String, Boolean, ForeignKey
+from sqlalchemy import Column, String, Boolean, Date, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.sql import func
-from sqlalchemy import DateTime
+from sqlalchemy.orm import relationship
+import uuid
 
 from app.models.base import Base
-
-if TYPE_CHECKING:
-    from app.models.role import Role
 
 
 class User(Base):
     __tablename__ = "users"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
-    external_auth_id: Mapped[str] = mapped_column(String(255), nullable=False)
-    name: Mapped[str] = mapped_column(String(150), nullable=False)
-    email: Mapped[str] = mapped_column(String(150), nullable=False)
+    external_auth_id = Column(String, nullable=True)
+    document_number = Column(String, nullable=False, unique=True)
 
-    position_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("positions.id"), nullable=True
-    )
+    name = Column(String, nullable=False)
+    email = Column(String, nullable=False, unique=True)
 
-    leader_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
-    )
+    position_name = Column(String, nullable=True)
+    area = Column(String, nullable=True)
+    subarea = Column(String, nullable=True)
 
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    hire_date = Column(Date, nullable=True)
+    contract_type = Column(String, nullable=True)
+    salary_type = Column(String, nullable=True)
 
-    created_at: Mapped[DateTime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    leader_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
 
-    updated_at: Mapped[DateTime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    is_active = Column(Boolean, default=True)
 
-    position = relationship("Position")
-    leader = relationship("User", remote_side=[id])
+    # Relaciones
+    leader = relationship("User", remote_side=[id], backref="subordinates")
 
-    user_roles = relationship(
-        "UserRole",
-        back_populates="user",
-        cascade="all, delete-orphan"
-    )
+    roles = relationship("UserRole", back_populates="user")
+    assignments = relationship("IndicatorAssignment", back_populates="user")
+    trackings = relationship("IndicatorTracking", back_populates="user")
