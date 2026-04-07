@@ -23,11 +23,10 @@ def get_current_user(
     request: Request,
     db: DBSession,
     hydra_access: str | None = Cookie(default=None),
-    x_access_token: str | None = Header(default=None, alias="X-Access-Token"),
-    x_access_token_lower: str | None = Header(default=None, alias="x-access-token"),
+    authorization: str | None = Header(default=None, alias="Authorization")
 ) -> User:
     
-    token = hydra_access or x_access_token or x_access_token_lower
+    token = hydra_access or authorization
     
     if not token:
         raise HTTPException(
