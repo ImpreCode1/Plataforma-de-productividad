@@ -18,6 +18,7 @@ class IndicatorTracking(Base):
     month = Column(Integer, nullable=False)
 
     achieved_value = Column(Numeric, nullable=True)
+    achieved_total = Column(Numeric, nullable=True)  # Denominador (total)
     achievement_percentage = Column(Numeric, nullable=True)
     weighted_score = Column(Numeric, nullable=True)
 

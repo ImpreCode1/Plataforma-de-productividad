@@ -15,6 +15,7 @@ class IndicatorTrackingResponse(BaseModel):
     month: int
 
     achieved_value: Optional[Decimal]
+    achieved_total: Optional[Decimal]
     achievement_percentage: Optional[Decimal]
     weighted_score: Optional[Decimal]
 
@@ -29,7 +30,9 @@ class TrackingListResponse(BaseModel):
 
 class TrackingUpdateRequest(BaseModel):
     achieved_value: Decimal
+    achieved_total: Optional[Decimal] = None
 
 
 class TrackingCloseRequest(BaseModel):
-    pass
+    achieved_value: Optional[Decimal] = None
+    achieved_total: Optional[Decimal] = None

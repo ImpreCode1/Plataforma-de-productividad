@@ -28,13 +28,16 @@ def get_dashboard_by_user(db: Session, user_id: UUID, year: int):
             months.append({
                 "month": t.month,
                 "achieved_value": t.achieved_value,
+                "achieved_total": t.achieved_total,
                 "achievement_percentage": t.achievement_percentage,
                 "status": t.status,
-                "is_closed": t.is_closed
+                "is_closed": t.is_closed,
+                "tracking_id": t.id
             })
 
         result.append({
             "indicator_name": assignment.indicator_name,
+            "formula": assignment.formula,
             "target_value": assignment.target_value,
             "weight": assignment.weight,
             "months": months
@@ -64,6 +67,8 @@ def get_team_dashboard(db: Session, leader_id: UUID, year: int):
         result.append({
             "user_id": user.id,
             "name": user.name,
+            "email": user.email,
+            "position_name": user.position_name,
             "indicators": user_dashboard["indicators"]
         })
 

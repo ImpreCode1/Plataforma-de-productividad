@@ -37,7 +37,7 @@ def get_tracking(db: Session, tracking_id: UUID):
 # UPDATE TRACKING (USER REPORTS)
 # ------------------------------------------------
 
-def update_tracking(db: Session, tracking_id: UUID, achieved_value):
+def update_tracking(db: Session, tracking_id: UUID, achieved_value, achieved_total=None):
 
     tracking = get_tracking(db, tracking_id)
 
@@ -56,18 +56,27 @@ def update_tracking(db: Session, tracking_id: UUID, achieved_value):
     # -----------------------------
 
     tracking.achieved_value = achieved_value
+    tracking.achieved_total = achieved_total
 
-    if assignment.target_value > 0:
+    if achieved_total is not None and achieved_total > 0:
+        achievement_percentage = (achieved_value / achieved_total) * 100
+    elif assignment.target_value is not None and assignment.target_value > 0:
         achievement_percentage = (achieved_value / assignment.target_value) * 100
     else:
         achievement_percentage = 0
 
-    weighted_score = (achievement_percentage * assignment.weight) / 100
+    weighted_score = (achievement_percentage * (assignment.weight or 0)) / 100
 
     tracking.achievement_percentage = round(achievement_percentage, 2)
     tracking.weighted_score = round(weighted_score, 2)
 
-    tracking.target_met = achieved_value >= assignment.target_value
+    target_met = False
+    if achieved_total is not None and achieved_total > 0:
+        target_met = achieved_value >= achieved_total
+    elif assignment.target_value is not None:
+        target_met = achieved_value >= assignment.target_value
+    
+    tracking.target_met = target_met
 
     tracking.status = "COMPLETED"
 
@@ -81,27 +90,63 @@ def update_tracking(db: Session, tracking_id: UUID, achieved_value):
 # CLOSE TRACKING (LEADER)
 # ------------------------------------------------
 
-def close_tracking(db: Session, tracking_id: UUID):
+def close_tracking(db: Session, tracking_id: UUID, achieved_value=None, achieved_total=None):
 
     tracking = get_tracking(db, tracking_id)
 
     if tracking.is_closed:
         raise HTTPException(status_code=400, detail="Already closed")
 
-    if tracking.achieved_value is None:
+    # Allow leader to update value when closing
+    if achieved_value is not None:
+        tracking.achieved_value = achieved_value
+        tracking.achieved_total = achieved_total
+        
+        assignment = db.query(IndicatorAssignment).filter(
+            IndicatorAssignment.id == tracking.assignment_id
+        ).first()
+
+        # Calcular: (logrado / total) * 100
+        if achieved_total is not None and achieved_total > 0:
+            achievement_percentage = (achieved_value / achieved_total) * 100
+        elif assignment and assignment.target_value is not None and assignment.target_value > 0:
+            achievement_percentage = (achieved_value / assignment.target_value) * 100
+        else:
+            achievement_percentage = 0
+
+        weighted_score = (achievement_percentage * (assignment.weight if assignment else 0)) / 100
+
+        tracking.achievement_percentage = round(achievement_percentage, 2)
+        tracking.weighted_score = round(weighted_score, 2)
+        
+        # Comparar logrado vs total
+        target_met = False
+        if achieved_total is not None and achieved_total > 0:
+            target_met = achieved_value >= achieved_total
+        elif assignment and assignment.target_value is not None:
+            target_met = achieved_value >= assignment.target_value
+        
+        tracking.target_met = target_met
+        tracking.status = "COMPLETED"
+
+    elif tracking.achieved_value is None:
         raise HTTPException(status_code=400, detail="Cannot close without value")
 
-    # 🔥 VALIDACIÓN CLAVE
+    # 🔥 VALIDACIÓN CLAVE - Auto-crear plan de acción si no existe
     if tracking.target_met is False:
         plans = db.query(ActionPlan).filter(
             ActionPlan.tracking_id == tracking_id
         ).count()
 
         if plans == 0:
-            raise HTTPException(
-                status_code=400,
-                detail="Action plan is required before closing"
+            from app.models import User
+            action_plan = ActionPlan(
+                tracking_id=tracking_id,
+                reason_not_met="Cierre automático: meta no alcanzada",
+                action_plan="Pendiente de definir",
+                created_by=tracking.user_id
             )
+            db.add(action_plan)
 
     tracking.is_closed = True
     tracking.status = "CLOSED"

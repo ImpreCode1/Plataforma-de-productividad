@@ -6,6 +6,7 @@ from app.modules.indicator_tracking import service
 from app.modules.indicator_tracking.schemas import (
     IndicatorTrackingResponse,
     TrackingUpdateRequest,
+    TrackingCloseRequest,
     TrackingListResponse
 )
 
@@ -71,7 +72,7 @@ def update_tracking(
     db: DBSession,
     current_user: CurrentUser
 ):
-    return service.update_tracking(db, tracking_id, data.achieved_value)
+    return service.update_tracking(db, tracking_id, data.achieved_value, data.achieved_total)
 
 
 # ------------------------------------------------
@@ -85,7 +86,8 @@ def update_tracking(
 )
 def close_tracking(
     tracking_id: UUID,
+    data: TrackingCloseRequest,
     db: DBSession,
     current_user: CurrentUser
 ):
-    return service.close_tracking(db, tracking_id)
+    return service.close_tracking(db, tracking_id, data.achieved_value, data.achieved_total)

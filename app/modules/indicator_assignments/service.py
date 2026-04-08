@@ -117,7 +117,22 @@ def delete_assignment(db: Session, assignment_id: UUID):
     if not assignment:
         raise HTTPException(status_code=404, detail="Assignment not found")
 
-    # Eliminar trackings relacionados primero
+    # Obtener los tracking_ids primero
+    trackings = db.query(IndicatorTracking).filter(
+        IndicatorTracking.assignment_id == assignment_id
+    ).all()
+    
+    tracking_ids = [t.id for t in trackings]
+
+    # Eliminar evidencia y planes de acción relacionados
+    if tracking_ids:
+        from app.models.evidence import Evidence
+        from app.models.action_plan import ActionPlan
+        
+        db.query(Evidence).filter(Evidence.tracking_id.in_(tracking_ids)).delete(synchronize_session=False)
+        db.query(ActionPlan).filter(ActionPlan.tracking_id.in_(tracking_ids)).delete(synchronize_session=False)
+
+    # Eliminar trackings relacionados
     db.query(IndicatorTracking).filter(
         IndicatorTracking.assignment_id == assignment_id
     ).delete()
