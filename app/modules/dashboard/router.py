@@ -1,5 +1,5 @@
 from uuid import UUID
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.core.security.dependencies import DBSession, CurrentUser, require_roles
 from app.modules.dashboard import service
@@ -9,6 +9,22 @@ router = APIRouter(
     prefix="/dashboard",
     tags=["Dashboard"]
 )
+
+
+# ------------------------------------------------
+# MY DASHBOARD
+# ------------------------------------------------
+
+@router.get(
+    "/me",
+    response_model=DashboardResponse
+)
+def get_my_dashboard(
+    year: int = Query(default=..., description="Año del dashboard"),
+    db: DBSession = DBSession,
+    current_user: CurrentUser = CurrentUser
+):
+    return service.get_dashboard_by_user(db, current_user.id, year)
 
 
 # ------------------------------------------------
@@ -26,6 +42,11 @@ def get_user_dashboard(
     current_user: CurrentUser
 ):
     return service.get_dashboard_by_user(db, user_id, year)
+
+
+# ------------------------------------------------
+# TEAM DASHBOARD (LEADER)
+# ------------------------------------------------
 
 @router.get(
     "/team",

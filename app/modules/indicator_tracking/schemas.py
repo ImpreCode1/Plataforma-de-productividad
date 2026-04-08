@@ -1,14 +1,12 @@
 from uuid import UUID
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, ConfigDict
+from typing import Optional, List
 from decimal import Decimal
 
 
-# -----------------------------
-# RESPONSE
-# -----------------------------
-
 class IndicatorTrackingResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: UUID
     user_id: UUID
     assignment_id: UUID
@@ -24,13 +22,10 @@ class IndicatorTrackingResponse(BaseModel):
     status: Optional[str]
     is_closed: bool
 
-    class Config:
-        from_attributes = True
 
+class TrackingListResponse(BaseModel):
+    tracking: List[IndicatorTrackingResponse]
 
-# -----------------------------
-# REQUESTS
-# -----------------------------
 
 class TrackingUpdateRequest(BaseModel):
     achieved_value: Decimal

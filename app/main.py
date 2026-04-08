@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.core.security.dependencies import get_current_user
 from app.db.session import get_db, SessionLocal
-from app.db.seed import seed_roles  # 🔥 IMPORTANTE
+from app.db.seed import seed_roles
 
 from app.modules.users.router import router as users_router
 from app.modules.indicator_assignments.router import router as indicators_router
@@ -15,6 +15,7 @@ from app.modules.evidence.router import router as evidence_router
 from app.modules.action_plan.router import router as action_plan_router
 from app.modules.dashboard.router import router as dashboard_router
 from app.modules.roles.router import router as roles_router
+from app.modules.team.router import router as team_router
 
 
 app = FastAPI(
@@ -25,7 +26,6 @@ app = FastAPI(
 app.mount("/uploads", StaticFiles(directory="app/uploads"), name="uploads")
 
 
-# 🔥 SEEDER AUTOMÁTICO AL INICIAR
 @app.on_event("startup")
 def run_seed():
     db = SessionLocal()
@@ -56,6 +56,7 @@ app.include_router(indicator_tracking_router, dependencies=[Depends(get_current_
 app.include_router(evidence_router, dependencies=[Depends(get_current_user)])
 app.include_router(action_plan_router, dependencies=[Depends(get_current_user)])
 app.include_router(dashboard_router, dependencies=[Depends(get_current_user)])
+app.include_router(team_router, dependencies=[Depends(get_current_user)])
 app.include_router(roles_router)
 
 
