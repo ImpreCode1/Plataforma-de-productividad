@@ -1,5 +1,5 @@
 from uuid import UUID
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Path, Query
 
 from app.core.security.dependencies import DBSession, CurrentUser, require_roles
 from app.modules.indicator_tracking import service
@@ -42,6 +42,20 @@ def get_tracking(
     current_user: CurrentUser
 ):
     data = service.get_tracking_by_user(db, user_id, year)
+    return {"tracking": data}
+
+
+# ------------------------------------------------
+# GET MY TEAM TRACKING (LEADER)
+# ------------------------------------------------
+
+@router.get("/team/{year}", response_model=TrackingListResponse)
+def get_team_tracking(
+    year: int = Path(default=..., description="Año de seguimiento"),
+    db: DBSession = DBSession,
+    current_user: CurrentUser = CurrentUser
+):
+    data = service.get_team_tracking(db, current_user.id, year)
     return {"tracking": data}
 
 

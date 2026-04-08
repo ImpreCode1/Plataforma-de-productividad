@@ -5,6 +5,74 @@ from fastapi import HTTPException
 from app.models.tracking import IndicatorTracking
 from app.models.indicator_assignment import IndicatorAssignment
 from app.models.action_plan import ActionPlan
+from app.models.user import User
+
+
+# ------------------------------------------------
+# GET TEAM TRACKING (LEADER)
+# ------------------------------------------------
+
+def get_team_tracking(db: Session, leader_id: UUID, year: int):
+    # Get subordinates
+    team = db.query(User).filter(
+        User.leader_id == leader_id,
+        User.is_active == True
+    ).all()
+
+    team_user_ids = [u.id for u in team]
+
+    # Get all tracking for team members
+    trackings = db.query(IndicatorTracking).filter(
+        IndicatorTracking.user_id.in_(team_user_ids),
+        IndicatorTracking.year == year
+    ).order_by(IndicatorTracking.user_id, IndicatorTracking.month).all()
+
+    result = []
+    for t in trackings:
+        # Get user and assignment info
+        user = db.query(User).filter(User.id == t.user_id).first()
+        assignment = db.query(IndicatorAssignment).filter(
+            IndicatorAssignment.id == t.assignment_id
+        ).first()
+
+        # Get action plans
+        action_plans = db.query(ActionPlan).filter(
+            ActionPlan.tracking_id == t.id
+        ).all()
+
+        plans_data = []
+        for plan in action_plans:
+            plans_data.append({
+                "id": str(plan.id),
+                "reason_not_met": plan.reason_not_met,
+                "action_plan": plan.action_plan,
+                "created_at": plan.created_at.isoformat() if plan.created_at else None
+            })
+
+        result.append({
+            "id": str(t.id),
+            "user_id": str(t.user_id),
+            "user_name": user.name if user else "Sin nombre",
+            "user_email": user.email if user else "",
+            "position_name": user.position_name if user else "",
+            "assignment_id": str(t.assignment_id) if t.assignment_id else None,
+            "indicator_name": assignment.indicator_name if assignment else "Sin indicador",
+            "target_value": assignment.target_value if assignment else None,
+            "weight": assignment.weight if assignment else None,
+            "formula": assignment.formula if assignment else None,
+            "year": t.year,
+            "month": t.month,
+            "achieved_value": float(t.achieved_value) if t.achieved_value else None,
+            "achieved_total": float(t.achieved_total) if t.achieved_total else None,
+            "achievement_percentage": float(t.achievement_percentage) if t.achievement_percentage else None,
+            "weighted_score": float(t.weighted_score) if t.weighted_score else None,
+            "target_met": t.target_met,
+            "status": t.status,
+            "is_closed": t.is_closed,
+            "action_plans": plans_data
+        })
+
+    return result
 
 
 # ------------------------------------------------
