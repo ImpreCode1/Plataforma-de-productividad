@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Numeric, Boolean, ForeignKey
+from sqlalchemy import Column, String, Integer, Numeric, Boolean, ForeignKey, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
@@ -14,10 +14,12 @@ class IndicatorAssignment(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
 
     indicator_name = Column(String, nullable=False)
+    formula = Column(Text, nullable=True)
     year = Column(Integer, nullable=False)
 
     target_value = Column(Numeric, nullable=False)
     weight = Column(Numeric, nullable=False)
+    frequency = Column(String, default="MONTHLY")
 
     is_active = Column(Boolean, default=True)
 

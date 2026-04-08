@@ -57,6 +57,15 @@ class UpdateUserRequest(BaseModel):
     subarea: Optional[str] = None
 
 
+class CreateUserRequest(BaseModel):
+    name: str
+    email: EmailStr
+    document_number: str
+    position_name: Optional[str] = None
+    area: Optional[str] = None
+    subarea: Optional[str] = None
+
+
 class ImportExcelResponse(BaseModel):
     created: int
     updated: int

@@ -1,5 +1,5 @@
 from uuid import UUID
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, UploadFile, File
 
 from app.core.security.dependencies import DBSession, CurrentUser, require_roles
 from app.modules.indicator_assignments import service
@@ -7,7 +7,8 @@ from app.modules.indicator_assignments.schemas import (
     IndicatorAssignmentCreate,
     IndicatorAssignmentResponse,
     IndicatorAssignmentListResponse,
-    IndicatorAssignmentUpdate
+    IndicatorAssignmentUpdate,
+    ImportAssignmentsResponse
 )
 
 router = APIRouter(
@@ -34,7 +35,7 @@ def create_assignment(
 
 
 # ------------------------------------------------
-# LIST
+# LIST (all or filtered)
 # ------------------------------------------------
 
 @router.get(
@@ -42,12 +43,15 @@ def create_assignment(
     response_model=IndicatorAssignmentListResponse
 )
 def list_assignments(
-    user_id: UUID,
-    year: int,
     db: DBSession,
-    current_user: CurrentUser
+    current_user: CurrentUser,
+    user_id: UUID | None = None,
+    year: int | None = None,
 ):
-    assignments = service.list_assignments(db, user_id, year)
+    if user_id and year:
+        assignments = service.list_assignments(db, user_id, year)
+    else:
+        assignments = service.list_all_assignments(db, year)
     return {"assignments": assignments}
 
 
@@ -84,3 +88,21 @@ def delete_assignment(
 ):
     service.delete_assignment(db, assignment_id)
     return {"message": "Deleted successfully"}
+
+
+# ------------------------------------------------
+# IMPORT EXCEL 🔥
+# ------------------------------------------------
+
+@router.post(
+    "/import-excel",
+    response_model=ImportAssignmentsResponse,
+    dependencies=[Depends(require_roles("ADMIN"))]
+)
+def import_assignments(
+    db: DBSession,
+    current_user: CurrentUser,
+    year: int,
+    file: UploadFile = File(...)
+):
+    return service.import_assignments_from_excel(db, file.file, year)

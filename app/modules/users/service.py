@@ -63,6 +63,51 @@ def get_user_with_roles(db: Session, user_id: UUID):
 
 
 # ------------------------------------------------
+# CREATE USER
+# ------------------------------------------------
+
+def create_user(db: Session, data):
+    # Validaremail único
+    existing_email = db.query(User).filter(User.email == data.email).first()
+    if existing_email:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    # Validar documento único
+    existing_doc = db.query(User).filter(User.document_number == data.document_number).first()
+    if existing_doc:
+        raise HTTPException(status_code=400, detail="Document number already registered")
+
+    user = User(
+        name=data.name,
+        email=data.email,
+        document_number=data.document_number,
+        position_name=data.position_name,
+        area=data.area,
+        subarea=data.subarea,
+    )
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "id": user.id,
+        "document_number": user.document_number,
+        "name": user.name,
+        "email": user.email,
+        "position_name": user.position_name,
+        "area": user.area,
+        "subarea": user.subarea,
+        "hire_date": user.hire_date,
+        "contract_type": user.contract_type,
+        "salary_type": user.salary_type,
+        "leader_id": user.leader_id,
+        "is_active": user.is_active,
+        "roles": []
+    }
+
+
+# ------------------------------------------------
 # Change status
 # ------------------------------------------------
 
@@ -99,7 +144,21 @@ def assign_leader(db: Session, user_id: UUID, leader_id: UUID | None):
     db.commit()
     db.refresh(user)
 
-    return {"message": "Leader assigned"}
+    return {
+        "id": user.id,
+        "document_number": user.document_number,
+        "name": user.name,
+        "email": user.email,
+        "position_name": user.position_name,
+        "area": user.area,
+        "subarea": user.subarea,
+        "hire_date": user.hire_date,
+        "contract_type": user.contract_type,
+        "salary_type": user.salary_type,
+        "leader_id": user.leader_id,
+        "is_active": user.is_active,
+        "roles": user.roles_flat
+    }
 
 
 # ------------------------------------------------

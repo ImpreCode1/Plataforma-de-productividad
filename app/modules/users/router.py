@@ -9,6 +9,7 @@ from app.modules.users.schemas import (
     ChangeStatusRequest,
     AssignLeaderRequest,
     UpdateUserRequest,
+    CreateUserRequest,
     ImportExcelResponse
 )
 
@@ -91,7 +92,7 @@ def change_status(
 @router.patch(
     "/{user_id}/leader",
     response_model=UserResponse,
-    dependencies=[Depends(require_roles("ADMIN", "LEADER"))]
+    dependencies=[Depends(require_roles("ADMIN"))]
 )
 def assign_leader(
     user_id: UUID,
@@ -118,6 +119,23 @@ def update_user(
     current_user: CurrentUser
 ):
     return service.update_user(db, user_id, data.model_dump(exclude_unset=True))
+
+
+# ------------------------------------------------
+# CREATE USER
+# ------------------------------------------------
+
+@router.post(
+    "/",
+    response_model=UserResponse,
+    dependencies=[Depends(require_roles("ADMIN"))]
+)
+def create_user(
+    data: CreateUserRequest,
+    db: DBSession,
+    current_user: CurrentUser
+):
+    return service.create_user(db, data)
 
 
 # ------------------------------------------------
