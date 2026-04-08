@@ -1,5 +1,6 @@
 from uuid import UUID
 from fastapi import APIRouter
+from pydantic import BaseModel
 
 from app.core.security.dependencies import DBSession, CurrentUser
 from app.modules.action_plan import service
@@ -13,6 +14,24 @@ router = APIRouter(
     prefix="/action-plan",
     tags=["Action Plan"]
 )
+
+class ActionPlanListResponse(BaseModel):
+    action_plans: list
+
+
+# ------------------------------------------------
+# LIST ALL (Leader's Team)
+# ------------------------------------------------
+
+@router.get("/team/{leader_id}/{year}", response_model=ActionPlanListResponse)
+def list_team_action_plans(
+    leader_id: UUID,
+    year: int,
+    db: DBSession,
+    current_user: CurrentUser
+):
+    data = service.list_team_action_plans(db, leader_id, year)
+    return {"action_plans": data}
 
 
 # ------------------------------------------------

@@ -4,6 +4,7 @@ from uuid import UUID
 from app.models.user import User
 from app.models.indicator_assignment import IndicatorAssignment
 from app.models.tracking import IndicatorTracking
+from app.models.action_plan import ActionPlan
 
 
 def get_dashboard_by_user(db: Session, user_id: UUID, year: int):
@@ -25,6 +26,20 @@ def get_dashboard_by_user(db: Session, user_id: UUID, year: int):
         months = []
 
         for t in trackings:
+            # Obtener planes de acción
+            action_plans = db.query(ActionPlan).filter(
+                ActionPlan.tracking_id == t.id
+            ).all()
+            
+            plans_data = []
+            for plan in action_plans:
+                plans_data.append({
+                    "id": str(plan.id),
+                    "reason_not_met": plan.reason_not_met,
+                    "action_plan": plan.action_plan,
+                    "created_at": plan.created_at.isoformat() if plan.created_at else None
+                })
+
             months.append({
                 "month": t.month,
                 "achieved_value": t.achieved_value,
@@ -32,7 +47,8 @@ def get_dashboard_by_user(db: Session, user_id: UUID, year: int):
                 "achievement_percentage": t.achievement_percentage,
                 "status": t.status,
                 "is_closed": t.is_closed,
-                "tracking_id": t.id
+                "tracking_id": t.id,
+                "action_plans": plans_data
             })
 
         result.append({

@@ -132,18 +132,32 @@ def close_tracking(db: Session, tracking_id: UUID, achieved_value=None, achieved
     elif tracking.achieved_value is None:
         raise HTTPException(status_code=400, detail="Cannot close without value")
 
-    # 🔥 VALIDACIÓN CLAVE - Auto-crear plan de acción si no existe
-    if tracking.target_met is False:
+    # Auto-crear plan de acción según resultado
+    if tracking.target_met is True:
+        # Meta cumplida - crear plan con mensaje satisfactorio
+        plans = db.query(ActionPlan).filter(
+            ActionPlan.tracking_id == tracking_id
+        ).count()
+        
+        if plans == 0:
+            action_plan = ActionPlan(
+                tracking_id=tracking_id,
+                reason_not_met="Meta cumplida",
+                action_plan="Se alcanzó la meta establecida",
+                created_by=tracking.user_id
+            )
+            db.add(action_plan)
+    else:
+        # Meta no cumplida - crear plan automático (líder debe editar después)
         plans = db.query(ActionPlan).filter(
             ActionPlan.tracking_id == tracking_id
         ).count()
 
         if plans == 0:
-            from app.models import User
             action_plan = ActionPlan(
                 tracking_id=tracking_id,
                 reason_not_met="Cierre automático: meta no alcanzada",
-                action_plan="Pendiente de definir",
+                action_plan="Pendiente de definir - El líder debe completar el plan de acción",
                 created_by=tracking.user_id
             )
             db.add(action_plan)
