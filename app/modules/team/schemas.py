@@ -18,3 +18,22 @@ class TeamMemberResponse(BaseModel):
 
 class TeamMembersResponse(BaseModel):
     members: List[TeamMemberResponse]
+
+
+class LeaderInfo(BaseModel):
+    id: UUID
+    name: str
+    email: str
+    position_name: Optional[str] = None
+    area: Optional[str] = None
+
+
+class TeamResponse(BaseModel):
+    leader: Optional[LeaderInfo]
+    members: List[dict]
+    count: int
+    is_unassigned: Optional[bool] = False
+
+
+class AllTeamsResponse(BaseModel):
+    teams: List[TeamResponse]
