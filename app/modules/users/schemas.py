@@ -48,6 +48,15 @@ class AssignLeaderRequest(BaseModel):
     leader_id: Optional[UUID]
 
 
+class UpdateUserRequest(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    document_number: Optional[str] = None
+    position_name: Optional[str] = None
+    area: Optional[str] = None
+    subarea: Optional[str] = None
+
+
 class ImportExcelResponse(BaseModel):
     created: int
     updated: int

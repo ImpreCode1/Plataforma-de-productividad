@@ -103,6 +103,54 @@ def assign_leader(db: Session, user_id: UUID, leader_id: UUID | None):
 
 
 # ------------------------------------------------
+# Update user
+# ------------------------------------------------
+
+def update_user(db: Session, user_id: UUID, data: dict):
+    user = (
+        db.query(User)
+        .options(selectinload(User.roles).selectinload(UserRole.role))
+        .filter(User.id == user_id)
+        .first()
+    )
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if "name" in data and data["name"]:
+        user.name = data["name"]
+    if "email" in data and data["email"]:
+        user.email = data["email"]
+    if "document_number" in data and data["document_number"]:
+        user.document_number = data["document_number"]
+    if "position_name" in data:
+        user.position_name = data["position_name"]
+    if "area" in data:
+        user.area = data["area"]
+    if "subarea" in data:
+        user.subarea = data["subarea"]
+
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "id": user.id,
+        "document_number": user.document_number,
+        "name": user.name,
+        "email": user.email,
+        "position_name": user.position_name,
+        "area": user.area,
+        "subarea": user.subarea,
+        "hire_date": user.hire_date,
+        "contract_type": user.contract_type,
+        "salary_type": user.salary_type,
+        "leader_id": user.leader_id,
+        "is_active": user.is_active,
+        "roles": user.roles_flat
+    }
+
+
+# ------------------------------------------------
 # IMPORT EXCEL 🔥 (bien hecho)
 # ------------------------------------------------
 

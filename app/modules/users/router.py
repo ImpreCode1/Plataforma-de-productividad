@@ -8,6 +8,7 @@ from app.modules.users.schemas import (
     UserListResponse,
     ChangeStatusRequest,
     AssignLeaderRequest,
+    UpdateUserRequest,
     ImportExcelResponse
 )
 
@@ -99,6 +100,24 @@ def assign_leader(
     current_user: CurrentUser
 ):
     return service.assign_leader(db, user_id, data.leader_id)
+
+
+# ------------------------------------------------
+# Update user
+# ------------------------------------------------
+
+@router.patch(
+    "/{user_id}",
+    response_model=UserResponse,
+    dependencies=[Depends(require_roles("ADMIN"))]
+)
+def update_user(
+    user_id: UUID,
+    data: UpdateUserRequest,
+    db: DBSession,
+    current_user: CurrentUser
+):
+    return service.update_user(db, user_id, data.model_dump(exclude_unset=True))
 
 
 # ------------------------------------------------
