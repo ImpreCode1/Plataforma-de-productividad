@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from uuid import UUID
 from fastapi import HTTPException
 import pandas as pd
@@ -7,25 +7,59 @@ from app.models.user import User
 from app.models.role import Role, UserRole
 
 
-# ------------------------------------------------
-# List users
-# ------------------------------------------------
-
 def list_users(db: Session):
-    return db.query(User).all()
+    users = (
+        db.query(User)
+        .options(selectinload(User.roles).selectinload(UserRole.role))
+        .all()
+    )
+    
+    return [
+        {
+            "id": u.id,
+            "document_number": u.document_number,
+            "name": u.name,
+            "email": u.email,
+            "position_name": u.position_name,
+            "area": u.area,
+            "subarea": u.subarea,
+            "hire_date": u.hire_date,
+            "contract_type": u.contract_type,
+            "salary_type": u.salary_type,
+            "leader_id": u.leader_id,
+            "is_active": u.is_active,
+            "roles": u.roles_flat
+        }
+        for u in users
+    ]
 
-
-# ------------------------------------------------
-# Get user with roles
-# ------------------------------------------------
 
 def get_user_with_roles(db: Session, user_id: UUID):
-    user = db.query(User).filter(User.id == user_id).first()
+    user = (
+        db.query(User)
+        .options(selectinload(User.roles).selectinload(UserRole.role))
+        .filter(User.id == user_id)
+        .first()
+    )
 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    return user
+    return {
+        "id": user.id,
+        "document_number": user.document_number,
+        "name": user.name,
+        "email": user.email,
+        "position_name": user.position_name,
+        "area": user.area,
+        "subarea": user.subarea,
+        "hire_date": user.hire_date,
+        "contract_type": user.contract_type,
+        "salary_type": user.salary_type,
+        "leader_id": user.leader_id,
+        "is_active": user.is_active,
+        "roles": user.roles_flat
+    }
 
 
 # ------------------------------------------------
@@ -33,13 +67,16 @@ def get_user_with_roles(db: Session, user_id: UUID):
 # ------------------------------------------------
 
 def change_status(db: Session, user_id: UUID, is_active: bool):
-    user = get_user_with_roles(db, user_id)
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
 
     user.is_active = is_active
     db.commit()
     db.refresh(user)
 
-    return user
+    return {"message": "Status updated"}
 
 
 # ------------------------------------------------
@@ -47,7 +84,10 @@ def change_status(db: Session, user_id: UUID, is_active: bool):
 # ------------------------------------------------
 
 def assign_leader(db: Session, user_id: UUID, leader_id: UUID | None):
-    user = get_user_with_roles(db, user_id)
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
 
     if leader_id:
         leader = db.query(User).filter(User.id == leader_id).first()
@@ -59,11 +99,11 @@ def assign_leader(db: Session, user_id: UUID, leader_id: UUID | None):
     db.commit()
     db.refresh(user)
 
-    return user
+    return {"message": "Leader assigned"}
 
 
 # ------------------------------------------------
-# IMPORT EXCEL 🔥
+# IMPORT EXCEL 🔥 (bien hecho)
 # ------------------------------------------------
 
 def import_users_from_excel(db: Session, file):
@@ -75,7 +115,7 @@ def import_users_from_excel(db: Session, file):
 
     users_dict = {}
 
-    # Primera pasada: crear usuarios
+    # Primera pasada: crear/actualizar usuarios
     for _, row in df.iterrows():
 
         email = row["EMAIL"]
@@ -104,7 +144,7 @@ def import_users_from_excel(db: Session, file):
 
     db.commit()
 
-    # Segunda pasada: asignar líderes
+    # Segunda pasada: líderes
     for _, row in df.iterrows():
         user = users_dict.get(row["NOMBRE COLABORADOR"])
         leader_name = row.get("JEFE DIRECTO")
@@ -116,16 +156,5 @@ def import_users_from_excel(db: Session, file):
 
     return {
         "created": created,
-        "updated": updated 
+        "updated": updated
     }
-    
-def get_user_with_roles(db: Session, user_id: UUID):
-    user = db.query(User).filter(User.id == user_id).first()
-
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    # 🔥 CLAVE
-    user.roles = [ur.role for ur in user.roles]
-
-    return user

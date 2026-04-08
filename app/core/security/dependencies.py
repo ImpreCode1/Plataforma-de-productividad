@@ -23,53 +23,50 @@ def get_current_user(
     request: Request,
     db: DBSession,
     hydra_access: str | None = Cookie(default=None),
-    authorization: str | None = Header(default=None, alias="Authorization")
+    authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> User:
-    
+
     token = hydra_access or authorization
-    
+
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="No autenticado",
         )
 
+    if token.startswith("Bearer "):
+        token = token[7:]
+
     payload = validate_jwt(token)
+
+    email = payload.get("email")
     external_auth_id = payload.get("sub")
 
-    if not external_auth_id:
+    if not email:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token sin identificador válido",
+            detail="Token sin email",
         )
 
+    # 🔥 Buscar por EMAIL (clave del sistema)
     user = (
         db.query(User)
-        .options(selectinload(User.user_roles).selectinload(UserRole.role))
-        .filter(User.external_auth_id == external_auth_id)
+        .options(selectinload(User.roles).selectinload(UserRole.role))
+        .filter(User.email == email)
         .first()
     )
 
+    # ❌ NO crear usuario → debe venir del Excel
     if not user:
-        email = payload.get("email")
-        name = payload.get("name")
-        
-        user = User(
-            external_auth_id=external_auth_id,
-            name=name or "Usuario",
-            email=email,
-            is_active=True,
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Usuario no registrado en la plataforma",
         )
-        db.add(user)
+
+    # 🔥 Opcional: vincular external_auth_id si no existe
+    if external_auth_id and not user.external_auth_id:
+        user.external_auth_id = external_auth_id
         db.commit()
-        db.refresh(user)
-        
-        user = (
-            db.query(User)
-            .options(selectinload(User.user_roles).selectinload(UserRole.role))
-            .filter(User.external_auth_id == external_auth_id)
-            .first()
-        )
 
     if not user.is_active:
         raise HTTPException(
@@ -88,11 +85,11 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 
 def require_roles(*allowed_roles: str):
 
-    def role_checker(
-        current_user: CurrentUser,
-    ) -> User:
+    def role_checker(current_user: CurrentUser) -> User:
 
-        user_roles = [ur.role.name for ur in current_user.user_roles] if hasattr(current_user, 'user_roles') else []
+        user_roles = [
+            ur.role.name for ur in current_user.roles if ur.role
+        ]
 
         if not any(role in allowed_roles for role in user_roles):
             raise HTTPException(

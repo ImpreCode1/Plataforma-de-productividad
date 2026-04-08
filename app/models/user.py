@@ -29,9 +29,12 @@ class User(Base):
 
     is_active = Column(Boolean, default=True)
 
-    # Relaciones
     leader = relationship("User", remote_side=[id], backref="subordinates")
 
     roles = relationship("UserRole", back_populates="user")
     assignments = relationship("IndicatorAssignment", back_populates="user")
     trackings = relationship("IndicatorTracking", back_populates="user")
+
+    @property
+    def roles_flat(self):
+        return [ur.role for ur in self.roles if ur.role]

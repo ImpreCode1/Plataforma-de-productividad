@@ -1,42 +1,35 @@
 from uuid import UUID
 from datetime import date
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from typing import List, Optional
 
 
-# -----------------------------
-# RESPONSE
-# -----------------------------
-
 class RoleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: UUID
     name: str
 
-    class Config:
-        from_attributes = True
-
 
 class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: UUID
     document_number: str
     name: str
     email: EmailStr
 
-    position_name: Optional[str]
-    area: Optional[str]
-    subarea: Optional[str]
+    position_name: Optional[str] = None
+    area: Optional[str] = None
+    subarea: Optional[str] = None
 
-    hire_date: Optional[date]
-    contract_type: Optional[str]
-    salary_type: Optional[str]
+    hire_date: Optional[date] = None
+    contract_type: Optional[str] = None
+    salary_type: Optional[str] = None
 
-    leader_id: Optional[UUID]
-    is_active: bool
-
+    leader_id: Optional[UUID] = None
+    is_active: bool = True
     roles: List[RoleOut] = Field(default_factory=list)
-
-    class Config:
-        from_attributes = True
 
 
 class UserListResponse(BaseModel):
