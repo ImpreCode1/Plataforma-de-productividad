@@ -5,6 +5,7 @@ from app.models.user import User
 from app.models.indicator_assignment import IndicatorAssignment
 from app.models.tracking import IndicatorTracking
 from app.models.action_plan import ActionPlan
+from app.models.evidence import Evidence
 
 
 def get_dashboard_by_user(db: Session, user_id: UUID, year: int):
@@ -40,6 +41,11 @@ def get_dashboard_by_user(db: Session, user_id: UUID, year: int):
                     "created_at": plan.created_at.isoformat() if plan.created_at else None
                 })
 
+            # Contar evidencias
+            evidence_count = db.query(Evidence).filter(
+                Evidence.tracking_id == t.id
+            ).count()
+
             months.append({
                 "month": t.month,
                 "achieved_value": t.achieved_value,
@@ -48,7 +54,8 @@ def get_dashboard_by_user(db: Session, user_id: UUID, year: int):
                 "status": t.status,
                 "is_closed": t.is_closed,
                 "tracking_id": t.id,
-                "action_plans": plans_data
+                "action_plans": plans_data,
+                "evidence_count": evidence_count
             })
 
         result.append({
