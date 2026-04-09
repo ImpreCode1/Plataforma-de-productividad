@@ -94,35 +94,65 @@ def check_evidence_ownership(db: Session, evidence_id, user_id):
 # CREATE EVIDENCE
 # ------------------------------------------------
 
-def create_evidence(db: Session, tracking_id, file: UploadFile, user_id):
-
-    tracking = db.query(IndicatorTracking).filter(
-        IndicatorTracking.id == tracking_id
-    ).first()
-
-    if not tracking:
-        raise HTTPException(status_code=404, detail="Tracking not found")
-
-    if tracking.is_closed:
-        raise HTTPException(status_code=400, detail="Tracking is closed")
-
-    if tracking.user_id != user_id:
-        raise HTTPException(status_code=403, detail="Not authorized")
+def create_evidence(db: Session, file: UploadFile, user_id, tracking_id=None, year=None, month=None, target_user_id=None):
 
     file_path = save_file(file)
 
-    evidence = Evidence(
-        tracking_id=tracking_id,
-        file_path=file_path,
-        uploaded_by=user_id,
-        uploaded_at=datetime.utcnow()
-    )
+    if tracking_id:
+        tracking = db.query(IndicatorTracking).filter(
+            IndicatorTracking.id == tracking_id
+        ).first()
 
-    db.add(evidence)
+        if not tracking:
+            raise HTTPException(status_code=404, detail="Tracking not found")
+
+        if tracking.is_closed:
+            raise HTTPException(status_code=400, detail="Tracking is closed")
+
+        if tracking.user_id != user_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+        evidence = Evidence(
+            tracking_id=tracking_id,
+            file_path=file_path,
+            uploaded_by=user_id,
+            uploaded_at=datetime.utcnow()
+        )
+
+        db.add(evidence)
+    else:
+        if not year or not month or not target_user_id:
+            raise HTTPException(status_code=400, detail="year, month and target_user_id required")
+
+        user_id_check = target_user_id or user_id
+
+        existing_trackings = db.query(IndicatorTracking).filter(
+            IndicatorTracking.user_id == user_id_check,
+            IndicatorTracking.year == year,
+            IndicatorTracking.month == month,
+            IndicatorTracking.is_closed == False
+        ).all()
+
+        if not existing_trackings:
+            raise HTTPException(status_code=404, detail="No active trackings found for this user/month")
+
+        evidences = []
+        for tracking in existing_trackings:
+            evidence = Evidence(
+                tracking_id=tracking.id,
+                user_id=user_id_check,
+                year=year,
+                month=month,
+                file_path=file_path,
+                uploaded_by=user_id,
+                uploaded_at=datetime.utcnow()
+            )
+            evidences.append(evidence)
+
+        db.add_all(evidences)
+
     db.commit()
-    db.refresh(evidence)
-
-    return evidence
+    return {"message": "Evidence uploaded to all indicators for this month"}
 
 
 # ------------------------------------------------

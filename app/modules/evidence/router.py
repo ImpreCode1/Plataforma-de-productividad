@@ -1,5 +1,5 @@
 from uuid import UUID
-from fastapi import APIRouter, UploadFile, File, Depends
+from fastapi import APIRouter, UploadFile, File, Depends, Query
 
 from app.core.security.dependencies import DBSession, CurrentUser, require_roles
 from app.modules.evidence import service
@@ -12,17 +12,20 @@ router = APIRouter(
 
 
 # ------------------------------------------------
-# UPLOAD (EMPLOYEE only)
+# UPLOAD TO ALL INDICATORS FOR MONTH (EMPLOYEE/LEADER/ADMIN)
 # ------------------------------------------------
 
-@router.post("/{tracking_id}", response_model=EvidenceResponse, dependencies=[Depends(require_roles("EMPLOYEE"))])
-def upload_evidence(
-    tracking_id: UUID,
+@router.post("/", response_model=EvidenceResponse, dependencies=[Depends(require_roles("EMPLOYEE", "LEADER", "ADMIN"))])
+def upload_evidence_to_month(
     db: DBSession,
     current_user: CurrentUser,
+    year: int = Query(...),
+    month: int = Query(...),
+    target_user_id: UUID = Query(None),
     file: UploadFile = File(...)
 ):
-    return service.create_evidence(db, tracking_id, file, current_user.id)
+    user_id = target_user_id or current_user.id
+    return service.create_evidence(db, file, current_user.id, year=year, month=month, target_user_id=user_id)
 
 
 # ------------------------------------------------

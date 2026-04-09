@@ -4,6 +4,14 @@ from typing import Optional, List
 from decimal import Decimal
 
 
+class EvidenceData(BaseModel):
+    id: UUID
+    file_path: str
+    
+    class Config:
+        from_attributes = True
+
+
 class IndicatorTrackingResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     
@@ -22,6 +30,9 @@ class IndicatorTrackingResponse(BaseModel):
     target_met: Optional[bool]
     status: Optional[str]
     is_closed: bool
+    
+    evidence_count: int = 0
+    evidences: List[EvidenceData] = []
 
 
 class TrackingListResponse(BaseModel):

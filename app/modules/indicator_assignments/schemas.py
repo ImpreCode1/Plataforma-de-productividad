@@ -12,6 +12,8 @@ class IndicatorAssignmentCreate(BaseModel):
     target_value: Decimal
     weight: Decimal
     frequency: str = "MONTHLY"
+    start_month: Optional[int] = None
+    end_month: Optional[int] = None
 
 
 class IndicatorAssignmentUpdate(BaseModel):
@@ -21,6 +23,8 @@ class IndicatorAssignmentUpdate(BaseModel):
     weight: Optional[Decimal] = None
     frequency: Optional[str] = None
     is_active: Optional[bool] = None
+    start_month: Optional[int] = None
+    end_month: Optional[int] = None
 
 
 class IndicatorAssignmentResponse(BaseModel):
@@ -33,6 +37,11 @@ class IndicatorAssignmentResponse(BaseModel):
     weight: Decimal
     frequency: str
     is_active: bool
+    start_month: int
+    end_month: int
+    position_name_at_assignment: Optional[str] = None
+    area_at_assignment: Optional[str] = None
+    subarea_at_assignment: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -45,3 +54,19 @@ class IndicatorAssignmentListResponse(BaseModel):
 class ImportAssignmentsResponse(BaseModel):
     created: int
     updated: int
+
+
+class CloseAssignmentRequest(BaseModel):
+    close_month: int
+
+
+class IndicatorData(BaseModel):
+    formula: Optional[str] = None
+    target_value: Decimal
+    weight: Decimal
+    frequency: str = "MONTHLY"
+
+
+class ReopenAssignmentRequest(BaseModel):
+    new_start_month: int
+    indicators: dict[str, IndicatorData]

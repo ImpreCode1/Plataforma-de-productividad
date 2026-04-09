@@ -166,6 +166,10 @@ def assign_leader(db: Session, user_id: UUID, leader_id: UUID | None):
 # ------------------------------------------------
 
 def update_user(db: Session, user_id: UUID, data: dict):
+    from datetime import datetime
+    from app.models.indicator_assignment import IndicatorAssignment
+    from app.models.tracking import IndicatorTracking
+
     user = (
         db.query(User)
         .options(selectinload(User.roles).selectinload(UserRole.role))
@@ -176,18 +180,67 @@ def update_user(db: Session, user_id: UUID, data: dict):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    old_position = user.position_name
+    old_area = user.area
+    old_subarea = user.subarea
+
     if "name" in data and data["name"]:
         user.name = data["name"]
     if "email" in data and data["email"]:
         user.email = data["email"]
     if "document_number" in data and data["document_number"]:
         user.document_number = data["document_number"]
-    if "position_name" in data:
-        user.position_name = data["position_name"]
-    if "area" in data:
-        user.area = data["area"]
-    if "subarea" in data:
-        user.subarea = data["subarea"]
+
+    new_position = data.get("position_name")
+    new_area = data.get("area")
+    new_subarea = data.get("subarea")
+
+    if new_position is not None:
+        user.position_name = new_position
+    if new_area is not None:
+        user.area = new_area
+    if new_subarea is not None:
+        user.subarea = new_subarea
+
+    position_changed = "position_name" in data
+    area_changed = "area" in data
+    subarea_changed = "subarea" in data
+
+    if position_changed or area_changed:
+        current_month = datetime.now().month
+        current_year = datetime.now().year
+
+        active_assignments = db.query(IndicatorAssignment).filter(
+            IndicatorAssignment.user_id == user_id,
+            IndicatorAssignment.year == current_year,
+            IndicatorAssignment.is_active == True
+        ).all()
+
+        from_month = current_month + 1
+
+        for assignment in active_assignments:
+            if assignment.end_month >= current_month:
+                assignment.end_month = current_month - 1
+                if assignment.end_month < assignment.start_month:
+                    assignment.end_month = assignment.start_month
+                    assignment.is_active = False
+
+                trackings_futuros = db.query(IndicatorTracking).filter(
+                    IndicatorTracking.assignment_id == assignment.id,
+                    IndicatorTracking.month >= from_month
+                ).all()
+
+                for tracking in trackings_futuros:
+                    from app.models.evidence import Evidence
+                    db.query(Evidence).filter(
+                        Evidence.tracking_id == tracking.id
+                    ).update({
+                        Evidence.tracking_id: None,
+                        Evidence.user_id: user_id,
+                        Evidence.year: tracking.year,
+                        Evidence.month: tracking.month
+                    })
+                    db.delete(tracking)
 
     db.commit()
     db.refresh(user)

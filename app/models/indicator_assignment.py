@@ -23,6 +23,13 @@ class IndicatorAssignment(Base):
 
     is_active = Column(Boolean, default=True)
 
+    start_month = Column(Integer, default=1)
+    end_month = Column(Integer, default=12)
+
+    position_name_at_assignment = Column(String, nullable=True)
+    area_at_assignment = Column(String, nullable=True)
+    subarea_at_assignment = Column(String, nullable=True)
+
     # Relaciones
     user = relationship("User", back_populates="assignments")
     trackings = relationship("IndicatorTracking", back_populates="assignment")

@@ -1,5 +1,6 @@
 from uuid import UUID
-from fastapi import APIRouter, Depends, UploadFile, File
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from typing import Optional
 
 from app.core.security.dependencies import DBSession, CurrentUser, require_roles
 from app.modules.indicator_assignments import service
@@ -8,7 +9,9 @@ from app.modules.indicator_assignments.schemas import (
     IndicatorAssignmentResponse,
     IndicatorAssignmentListResponse,
     IndicatorAssignmentUpdate,
-    ImportAssignmentsResponse
+    ImportAssignmentsResponse,
+    CloseAssignmentRequest,
+    ReopenAssignmentRequest
 )
 
 router = APIRouter(
@@ -106,3 +109,42 @@ def import_assignments(
     file: UploadFile = File(...)
 ):
     return service.import_assignments_from_excel(db, file.file, year)
+
+
+# ------------------------------------------------
+# CLOSE ASSIGNMENT
+# ------------------------------------------------
+
+@router.patch(
+    "/{assignment_id}/close",
+    response_model=IndicatorAssignmentResponse,
+    dependencies=[Depends(require_roles("ADMIN"))]
+)
+def close_assignment(
+    assignment_id: UUID,
+    data: CloseAssignmentRequest,
+    db: DBSession,
+    current_user: CurrentUser
+):
+    return service.close_assignment(db, assignment_id, data.close_month)
+
+
+# ------------------------------------------------
+# REOPEN ASSIGNMENT (create new with new position)
+# ------------------------------------------------
+
+@router.post(
+    "/{assignment_id}/reopen",
+    response_model=IndicatorAssignmentListResponse,
+    dependencies=[Depends(require_roles("ADMIN"))]
+)
+def reopen_assignment(
+    assignment_id: UUID,
+    data: ReopenAssignmentRequest,
+    db: DBSession,
+    current_user: CurrentUser
+):
+    assignments = service.reopen_assignment(
+        db, assignment_id, data.new_start_month, data.indicators
+    )
+    return {"assignments": [a for a, _ in assignments]}

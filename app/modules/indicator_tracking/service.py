@@ -80,10 +80,21 @@ def get_team_tracking(db: Session, leader_id: UUID, year: int):
 # ------------------------------------------------
 
 def get_tracking_by_user(db: Session, user_id: UUID, year: int):
-    return db.query(IndicatorTracking).filter(
+    from sqlalchemy.orm import joinedload
+    from app.models.evidence import Evidence
+    
+    trackings = db.query(IndicatorTracking).options(
+        joinedload(IndicatorTracking.evidences)
+    ).filter(
         IndicatorTracking.user_id == user_id,
         IndicatorTracking.year == year
     ).order_by(IndicatorTracking.month).all()
+    
+    for t in trackings:
+        t.evidence_count = len(t.evidences) if t.evidences else 0
+        t.evidences = t.evidences or []
+    
+    return trackings
 
 
 # ------------------------------------------------
