@@ -59,3 +59,20 @@ def get_team_dashboard(
     current_user: CurrentUser
 ):
     return service.get_team_dashboard(db, current_user.id, year)
+
+
+# ------------------------------------------------
+# GLOBAL DASHBOARD (ADMIN)
+# ------------------------------------------------
+
+@router.get(
+    "/global",
+    response_model=dict
+)
+def get_global_dashboard(
+    year: int,
+    month: int = None,
+    db: DBSession = DBSession,
+    current_user: CurrentUser = CurrentUser
+):
+    return service.get_global_dashboard(db, year, month)

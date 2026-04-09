@@ -187,48 +187,18 @@ def close_tracking(db: Session, tracking_id: UUID, achieved_value=None, achieved
         tracking.achievement_percentage = round(achievement_percentage, 2)
         tracking.weighted_score = round(weighted_score, 2)
         
-        # Comparar logrado vs total
+        # Comparar achievement_percentage vs target_value (meta del indicador)
         target_met = False
-        if achieved_total is not None and achieved_total > 0:
-            target_met = achieved_value >= achieved_total
-        elif assignment and assignment.target_value is not None:
-            target_met = achieved_value >= assignment.target_value
+        if assignment and assignment.target_value is not None:
+            target_met = achievement_percentage >= assignment.target_value
+        elif achieved_total is not None and achieved_total > 0:
+            target_met = (achieved_value / achieved_total * 100) >= 100
         
         tracking.target_met = target_met
         tracking.status = "COMPLETED"
 
     elif tracking.achieved_value is None:
         raise HTTPException(status_code=400, detail="Cannot close without value")
-
-    # Auto-crear plan de acción según resultado
-    if tracking.target_met is True:
-        # Meta cumplida - crear plan con mensaje satisfactorio
-        plans = db.query(ActionPlan).filter(
-            ActionPlan.tracking_id == tracking_id
-        ).count()
-        
-        if plans == 0:
-            action_plan = ActionPlan(
-                tracking_id=tracking_id,
-                reason_not_met="Meta cumplida",
-                action_plan="Se alcanzó la meta establecida",
-                created_by=tracking.user_id
-            )
-            db.add(action_plan)
-    else:
-        # Meta no cumplida - crear plan automático (líder debe editar después)
-        plans = db.query(ActionPlan).filter(
-            ActionPlan.tracking_id == tracking_id
-        ).count()
-
-        if plans == 0:
-            action_plan = ActionPlan(
-                tracking_id=tracking_id,
-                reason_not_met="Cierre automático: meta no alcanzada",
-                action_plan="Pendiente de definir - El líder debe completar el plan de acción",
-                created_by=tracking.user_id
-            )
-            db.add(action_plan)
 
     tracking.is_closed = True
     tracking.status = "CLOSED"
