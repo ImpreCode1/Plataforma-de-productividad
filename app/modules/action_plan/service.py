@@ -72,6 +72,51 @@ def list_team_action_plans(db: Session, leader_id: UUID, year: int):
 
 
 # ------------------------------------------------
+# LIST MY ACTION PLANS (Employee)
+# ------------------------------------------------
+
+def list_my_action_plans(db: Session, user_id: UUID, year: int):
+    
+    trackings = db.query(IndicatorTracking).filter(
+        IndicatorTracking.user_id == user_id,
+        IndicatorTracking.year == year,
+        IndicatorTracking.is_closed == True
+    ).all()
+
+    result = []
+    for tracking in trackings:
+        action_plans = db.query(ActionPlan).filter(
+            ActionPlan.tracking_id == tracking.id
+        ).all()
+
+        if action_plans:
+            for plan in action_plans:
+                indicator_name = tracking.assignment.indicator_name if tracking.assignment else "Sin indicador"
+                target_value = tracking.assignment.target_value if tracking.assignment else 0
+
+                achieved_percentage = None
+                if tracking.achieved_value and tracking.achieved_total:
+                    achieved_percentage = (float(tracking.achieved_value) / float(tracking.achieved_total)) * 100
+
+                result.append({
+                    "id": str(plan.id),
+                    "tracking_id": str(tracking.id),
+                    "indicator_name": indicator_name,
+                    "target_value": target_value,
+                    "achieved_value": float(tracking.achieved_value) if tracking.achieved_value else None,
+                    "achieved_total": float(tracking.achieved_total) if tracking.achieved_total else None,
+                    "achieved_percentage": achieved_percentage,
+                    "month": tracking.month,
+                    "year": tracking.year,
+                    "reason_not_met": plan.reason_not_met,
+                    "action_plan": plan.action_plan,
+                    "created_at": plan.created_at.isoformat() if plan.created_at else None
+                })
+
+    return result
+
+
+# ------------------------------------------------
 # CREATE
 # ------------------------------------------------
 

@@ -35,6 +35,20 @@ def list_team_action_plans(
 
 
 # ------------------------------------------------
+# LIST MY ACTION PLANS (Employee)
+# ------------------------------------------------
+
+@router.get("/me/{year}", response_model=ActionPlanListResponse)
+def list_my_action_plans(
+    year: int,
+    db: DBSession,
+    current_user: CurrentUser
+):
+    data = service.list_my_action_plans(db, current_user.id, year)
+    return {"action_plans": data}
+
+
+# ------------------------------------------------
 # CREATE
 # ------------------------------------------------
 
