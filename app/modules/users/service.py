@@ -1,7 +1,45 @@
+import re
+from datetime import datetime
 from sqlalchemy.orm import Session, selectinload
 from uuid import UUID
 from fastapi import HTTPException
 import pandas as pd
+
+
+def normalize_name(name):
+    if not name:
+        return name
+    return re.sub(r"\s+", " ", str(name).strip())
+
+
+def names_match(name1, name2, threshold=0.9):
+    if not name1 or not name2:
+        return False
+
+    words1 = set(normalize_name(name1).lower().split())
+    words2 = set(normalize_name(name2).lower().split())
+
+    if not words1 or not words2:
+        return False
+
+    intersection = words1 & words2
+    min_words = min(len(words1), len(words2))
+
+    return len(intersection) / min_words >= threshold
+
+
+def find_user_by_fuzzy_name(users_dict, target_name):
+    if not target_name:
+        return None
+
+    target = normalize_name(target_name).lower()
+
+    for key, user in users_dict.items():
+        if isinstance(key, str) and names_match(key.lower(), target):
+            return user
+
+    return None
+
 
 from app.models.user import User
 from app.models.role import Role, UserRole
@@ -13,7 +51,7 @@ def list_users(db: Session):
         .options(selectinload(User.roles).selectinload(UserRole.role))
         .all()
     )
-    
+
     return [
         {
             "id": u.id,
@@ -28,7 +66,7 @@ def list_users(db: Session):
             "salary_type": u.salary_type,
             "leader_id": u.leader_id,
             "is_active": u.is_active,
-            "roles": u.roles_flat
+            "roles": u.roles_flat,
         }
         for u in users
     ]
@@ -58,13 +96,14 @@ def get_user_with_roles(db: Session, user_id: UUID):
         "salary_type": user.salary_type,
         "leader_id": user.leader_id,
         "is_active": user.is_active,
-        "roles": user.roles_flat
+        "roles": user.roles_flat,
     }
 
 
 # ------------------------------------------------
 # CREATE USER
 # ------------------------------------------------
+
 
 def create_user(db: Session, data):
     # Validaremail único
@@ -73,9 +112,13 @@ def create_user(db: Session, data):
         raise HTTPException(status_code=400, detail="Email already registered")
 
     # Validar documento único
-    existing_doc = db.query(User).filter(User.document_number == data.document_number).first()
+    existing_doc = (
+        db.query(User).filter(User.document_number == data.document_number).first()
+    )
     if existing_doc:
-        raise HTTPException(status_code=400, detail="Document number already registered")
+        raise HTTPException(
+            status_code=400, detail="Document number already registered"
+        )
 
     user = User(
         name=data.name,
@@ -103,13 +146,14 @@ def create_user(db: Session, data):
         "salary_type": user.salary_type,
         "leader_id": user.leader_id,
         "is_active": user.is_active,
-        "roles": []
+        "roles": [],
     }
 
 
 # ------------------------------------------------
 # Change status
 # ------------------------------------------------
+
 
 def change_status(db: Session, user_id: UUID, is_active: bool):
     user = db.query(User).filter(User.id == user_id).first()
@@ -127,6 +171,7 @@ def change_status(db: Session, user_id: UUID, is_active: bool):
 # ------------------------------------------------
 # Assign leader
 # ------------------------------------------------
+
 
 def assign_leader(db: Session, user_id: UUID, leader_id: UUID | None):
     user = db.query(User).filter(User.id == user_id).first()
@@ -157,13 +202,14 @@ def assign_leader(db: Session, user_id: UUID, leader_id: UUID | None):
         "salary_type": user.salary_type,
         "leader_id": user.leader_id,
         "is_active": user.is_active,
-        "roles": user.roles_flat
+        "roles": user.roles_flat,
     }
 
 
 # ------------------------------------------------
 # Update user
 # ------------------------------------------------
+
 
 def update_user(db: Session, user_id: UUID, data: dict):
     from datetime import datetime
@@ -210,11 +256,15 @@ def update_user(db: Session, user_id: UUID, data: dict):
         current_month = datetime.now().month
         current_year = datetime.now().year
 
-        active_assignments = db.query(IndicatorAssignment).filter(
-            IndicatorAssignment.user_id == user_id,
-            IndicatorAssignment.year == current_year,
-            IndicatorAssignment.is_active == True
-        ).all()
+        active_assignments = (
+            db.query(IndicatorAssignment)
+            .filter(
+                IndicatorAssignment.user_id == user_id,
+                IndicatorAssignment.year == current_year,
+                IndicatorAssignment.is_active == True,
+            )
+            .all()
+        )
 
         from_month = current_month + 1
 
@@ -225,21 +275,28 @@ def update_user(db: Session, user_id: UUID, data: dict):
                     assignment.end_month = assignment.start_month
                     assignment.is_active = False
 
-                trackings_futuros = db.query(IndicatorTracking).filter(
-                    IndicatorTracking.assignment_id == assignment.id,
-                    IndicatorTracking.month >= from_month
-                ).all()
+                trackings_futuros = (
+                    db.query(IndicatorTracking)
+                    .filter(
+                        IndicatorTracking.assignment_id == assignment.id,
+                        IndicatorTracking.month >= from_month,
+                    )
+                    .all()
+                )
 
                 for tracking in trackings_futuros:
                     from app.models.evidence import Evidence
+
                     db.query(Evidence).filter(
                         Evidence.tracking_id == tracking.id
-                    ).update({
-                        Evidence.tracking_id: None,
-                        Evidence.user_id: user_id,
-                        Evidence.year: tracking.year,
-                        Evidence.month: tracking.month
-                    })
+                    ).update(
+                        {
+                            Evidence.tracking_id: None,
+                            Evidence.user_id: user_id,
+                            Evidence.year: tracking.year,
+                            Evidence.month: tracking.month,
+                        }
+                    )
                     db.delete(tracking)
 
     db.commit()
@@ -258,13 +315,14 @@ def update_user(db: Session, user_id: UUID, data: dict):
         "salary_type": user.salary_type,
         "leader_id": user.leader_id,
         "is_active": user.is_active,
-        "roles": user.roles_flat
+        "roles": user.roles_flat,
     }
 
 
 # ------------------------------------------------
-# IMPORT EXCEL 🔥 (bien hecho)
+# IMPORT EXCEL
 # ------------------------------------------------
+
 
 def import_users_from_excel(db: Session, file):
 
@@ -275,46 +333,121 @@ def import_users_from_excel(db: Session, file):
 
     users_dict = {}
 
-    # Primera pasada: crear/actualizar usuarios
-    for _, row in df.iterrows():
+    column_mapping = {
+        "C.C. No.": "document_number",
+        "NOMBRE COLABORADOR": "name",
+        "CORREO": "email",
+        "CARGO": "position_name",
+        "AREA": "area",
+        "SUBAREA/DIVISION": "subarea",
+        "FECHA DE INGRESO": "hire_date",
+        "TIPO DE CONTRATO": "contract_type",
+        "TIPO DE SALARIO": "salary_type",
+    }
 
-        email = row["EMAIL"]
+    for _, row in df.iterrows():
+        email = row["CORREO"]
+        if pd.isna(email) or not email:
+            continue
 
         user = db.query(User).filter(User.email == email).first()
+
+        hire_date = None
+        if "FECHA DE INGRESO" in row and not pd.isna(row.get("FECHA DE INGRESO")):
+            hire_date = row["FECHA DE INGRESO"]
+            if isinstance(hire_date, str):
+                try:
+                    hire_date = datetime.strptime(hire_date, "%Y-%m-%d").date()
+                except:
+                    try:
+                        hire_date = datetime.strptime(hire_date, "%d/%m/%Y").date()
+                    except:
+                        hire_date = None
 
         if not user:
             user = User(
                 document_number=str(row["C.C. No."]),
                 name=row["NOMBRE COLABORADOR"],
                 email=email,
-                position_name=row.get("CARGO"),
-                area=row.get("AREA (VP)"),
-                subarea=row.get("SUBAREA (División)"),
+                position_name=row.get("CARGO")
+                if not pd.isna(row.get("CARGO"))
+                else None,
+                area=row.get("AREA") if not pd.isna(row.get("AREA")) else None,
+                subarea=row.get("SUBAREA/DIVISION")
+                if not pd.isna(row.get("SUBAREA/DIVISION"))
+                else None,
+                hire_date=hire_date,
+                contract_type=row.get("TIPO DE CONTRATO")
+                if not pd.isna(row.get("TIPO DE CONTRATO"))
+                else None,
+                salary_type=row.get("TIPO DE SALARIO")
+                if not pd.isna(row.get("TIPO DE SALARIO"))
+                else None,
             )
             db.add(user)
             created += 1
         else:
             user.name = row["NOMBRE COLABORADOR"]
-            user.position_name = row.get("CARGO")
-            user.area = row.get("AREA (VP)")
-            user.subarea = row.get("SUBAREA (División)")
+            user.position_name = (
+                row.get("CARGO")
+                if not pd.isna(row.get("CARGO"))
+                else user.position_name
+            )
+            user.area = row.get("AREA") if not pd.isna(row.get("AREA")) else user.area
+            user.subarea = (
+                row.get("SUBAREA/DIVISION")
+                if not pd.isna(row.get("SUBAREA/DIVISION"))
+                else user.subarea
+            )
+            user.hire_date = hire_date if hire_date else user.hire_date
+            user.contract_type = (
+                row.get("TIPO DE CONTRATO")
+                if not pd.isna(row.get("TIPO DE CONTRATO"))
+                else user.contract_type
+            )
+            user.salary_type = (
+                row.get("TIPO DE SALARIO")
+                if not pd.isna(row.get("TIPO DE SALARIO"))
+                else user.salary_type
+            )
             updated += 1
 
+        users_dict[normalize_name(user.name).lower()] = user
+        users_dict[user.email.strip().lower()] = user
         users_dict[user.name] = user
 
     db.commit()
 
-    # Segunda pasada: líderes
     for _, row in df.iterrows():
-        user = users_dict.get(row["NOMBRE COLABORADOR"])
-        leader_name = row.get("JEFE DIRECTO")
+        user_name = normalize_name(row["NOMBRE COLABORADOR"])
+        user = users_dict.get(user_name) or users_dict.get(user_name.lower())
+        if not user:
+            continue
 
-        if leader_name and leader_name in users_dict:
-            user.leader_id = users_dict[leader_name].id
+        leader_name = row.get("JEFE DIRECTO")
+        leader_cell = str(leader_name).strip() if leader_name is not None else ""
+
+        if (
+            leader_cell == ""
+            or str(leader_name).lower() in ["nan", "none", "null", "nil"]
+            or str(leader_name) == ""
+        ):
+            user.leader_id = None
+            continue
+
+        leader_name = normalize_name(leader_name)
+        if leader_name:
+            leader = users_dict.get(leader_name) or users_dict.get(leader_name.lower())
+            if not leader:
+                leader = find_user_by_fuzzy_name(users_dict, leader_name)
+            if not leader:
+                leader = (
+                    db.query(User).filter(User.name.ilike(f"%{leader_name}%")).first()
+                )
+
+            if leader:
+                user.leader_id = leader.id
 
     db.commit()
 
-    return {
-        "created": created,
-        "updated": updated
-    }
+    return {"created": created, "updated": updated}
