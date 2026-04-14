@@ -46,11 +46,13 @@ from app.models.role import Role, UserRole
 
 
 def list_users(db: Session):
-    users = (
-        db.query(User)
-        .options(selectinload(User.roles).selectinload(UserRole.role))
-        .all()
-    )
+    users = db.query(User).all()
+
+    leader_ids = set(u.leader_id for u in users if u.leader_id)
+    leaders = {}
+    if leader_ids:
+        leader_users = db.query(User).filter(User.id.in_(leader_ids)).all()
+        leaders = {l.id: l.name for l in leader_users}
 
     return [
         {
@@ -65,6 +67,7 @@ def list_users(db: Session):
             "contract_type": u.contract_type,
             "salary_type": u.salary_type,
             "leader_id": u.leader_id,
+            "leader_name": leaders.get(u.leader_id) if u.leader_id else None,
             "is_active": u.is_active,
             "roles": u.roles_flat,
         }
@@ -75,7 +78,10 @@ def list_users(db: Session):
 def get_user_with_roles(db: Session, user_id: UUID):
     user = (
         db.query(User)
-        .options(selectinload(User.roles).selectinload(UserRole.role))
+        .options(
+            selectinload(User.roles).selectinload(UserRole.role),
+            selectinload(User.leader),
+        )
         .filter(User.id == user_id)
         .first()
     )
@@ -95,6 +101,7 @@ def get_user_with_roles(db: Session, user_id: UUID):
         "contract_type": user.contract_type,
         "salary_type": user.salary_type,
         "leader_id": user.leader_id,
+        "leader_name": user.leader.name if user.leader else None,
         "is_active": user.is_active,
         "roles": user.roles_flat,
     }
