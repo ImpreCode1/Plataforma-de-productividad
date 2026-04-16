@@ -12,7 +12,7 @@ def normalize_name(name):
     return re.sub(r"\s+", " ", str(name).strip())
 
 
-def names_match(name1, name2, threshold=0.9):
+def names_match(name1, name2, threshold=0.75):
     if not name1 or not name2:
         return False
 
@@ -454,6 +454,29 @@ def import_users_from_excel(db: Session, file):
 
             if leader:
                 user.leader_id = leader.id
+
+    db.commit()
+
+    leader_role = db.query(Role).filter(Role.name == "LEADER").first()
+    employee_role = db.query(Role).filter(Role.name == "EMPLOYEE").first()
+
+    if not leader_role or not employee_role:
+        raise HTTPException(status_code=500, detail="Roles LEADER or EMPLOYEE not found in database")
+
+    subordinate_ids = set()
+    for user in users_dict.values():
+        if user.leader_id:
+            subordinate_ids.add(user.leader_id)
+
+    unique_users = set(users_dict.values())
+
+    for user in unique_users:
+        db.query(UserRole).filter(UserRole.user_id == user.id).delete(synchronize_session=False)
+
+        if user.id in subordinate_ids:
+            db.add(UserRole(user_id=user.id, role_id=leader_role.id))
+        else:
+            db.add(UserRole(user_id=user.id, role_id=employee_role.id))
 
     db.commit()
 
