@@ -1,55 +1,71 @@
-from pydantic import BaseModel, EmailStr
 from uuid import UUID
+from datetime import date
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from typing import List, Optional
 
 
-# -----------------------------
-# Base
-# -----------------------------
-
-class UserBase(BaseModel):
+class RoleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: UUID
     name: str
+
+
+class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: UUID
+    document_number: str
+    name: str
     email: EmailStr
-    is_active: bool
-    position_id: Optional[UUID]
-    leader_id: Optional[UUID]
 
+    position_name: Optional[str] = None
+    area: Optional[str] = None
+    subarea: Optional[str] = None
 
-# -----------------------------
-# Response
-# -----------------------------
+    hire_date: Optional[date] = None
+    contract_type: Optional[str] = None
+    salary_type: Optional[str] = None
 
-class UserResponse(UserBase):
-    roles: List[str]
+    leader_id: Optional[UUID] = None
+    is_active: bool = True
+    roles: List[RoleOut] = Field(default_factory=list)
 
-    class Config:
-        from_attributes = True
-
-
-# -----------------------------
-# List Response
-# -----------------------------
 
 class UserListResponse(BaseModel):
     users: List[UserResponse]
 
 
 # -----------------------------
-# Requests
+# REQUESTS
 # -----------------------------
 
 class ChangeStatusRequest(BaseModel):
     is_active: bool
 
 
-class AssignRolesRequest(BaseModel):
-    role_ids: List[UUID]
-
-
 class AssignLeaderRequest(BaseModel):
     leader_id: Optional[UUID]
 
 
-class ChangePositionRequest(BaseModel):
-    position_id: Optional[UUID]
+class UpdateUserRequest(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    document_number: Optional[str] = None
+    position_name: Optional[str] = None
+    area: Optional[str] = None
+    subarea: Optional[str] = None
+
+
+class CreateUserRequest(BaseModel):
+    name: str
+    email: EmailStr
+    document_number: str
+    position_name: Optional[str] = None
+    area: Optional[str] = None
+    subarea: Optional[str] = None
+
+
+class ImportExcelResponse(BaseModel):
+    created: int
+    updated: int

@@ -1,5 +1,5 @@
 from uuid import UUID
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, UploadFile, File
 
 from app.core.security.dependencies import DBSession, CurrentUser, require_roles
 from app.modules.users import service
@@ -7,9 +7,10 @@ from app.modules.users.schemas import (
     UserResponse,
     UserListResponse,
     ChangeStatusRequest,
-    AssignRolesRequest,
     AssignLeaderRequest,
-    ChangePositionRequest
+    UpdateUserRequest,
+    CreateUserRequest,
+    ImportExcelResponse
 )
 
 router = APIRouter(
@@ -31,12 +32,23 @@ def list_users(
     db: DBSession,
     current_user: CurrentUser
 ):
-
     users = service.list_users(db)
+    return {"users": users}
 
-    return {
-        "users": users
-    }
+
+# ------------------------------------------------
+# Get current user (me)
+# ------------------------------------------------
+
+@router.get(
+    "/me",
+    response_model=UserResponse
+)
+def get_me(
+    db: DBSession,
+    current_user: CurrentUser
+):
+    return service.get_user_with_roles(db, current_user.id)
 
 
 # ------------------------------------------------
@@ -52,8 +64,7 @@ def get_user(
     db: DBSession,
     current_user: CurrentUser
 ):
-
-    return service.get_user(db, user_id)
+    return service.get_user_with_roles(db, user_id)
 
 
 # ------------------------------------------------
@@ -71,27 +82,7 @@ def change_status(
     db: DBSession,
     current_user: CurrentUser
 ):
-
     return service.change_status(db, user_id, data.is_active)
-
-
-# ------------------------------------------------
-# Assign roles
-# ------------------------------------------------
-
-@router.patch(
-    "/{user_id}/roles",
-    response_model=UserResponse,
-    dependencies=[Depends(require_roles("ADMIN"))]
-)
-def assign_roles(
-    user_id: UUID,
-    data: AssignRolesRequest,
-    db: DBSession,
-    current_user: CurrentUser
-):
-
-    return service.assign_roles(db, user_id, data.role_ids)
 
 
 # ------------------------------------------------
@@ -101,7 +92,7 @@ def assign_roles(
 @router.patch(
     "/{user_id}/leader",
     response_model=UserResponse,
-    dependencies=[Depends(require_roles("ADMIN", "LEADER"))]
+    dependencies=[Depends(require_roles("ADMIN"))]
 )
 def assign_leader(
     user_id: UUID,
@@ -109,24 +100,56 @@ def assign_leader(
     db: DBSession,
     current_user: CurrentUser
 ):
-
     return service.assign_leader(db, user_id, data.leader_id)
 
 
 # ------------------------------------------------
-# Change position
+# Update user
 # ------------------------------------------------
 
 @router.patch(
-    "/{user_id}/position",
+    "/{user_id}",
     response_model=UserResponse,
     dependencies=[Depends(require_roles("ADMIN"))]
 )
-def change_position(
+def update_user(
     user_id: UUID,
-    data: ChangePositionRequest,
+    data: UpdateUserRequest,
     db: DBSession,
     current_user: CurrentUser
 ):
+    return service.update_user(db, user_id, data.model_dump(exclude_unset=True))
 
-    return service.change_position(db, user_id, data.position_id)
+
+# ------------------------------------------------
+# CREATE USER
+# ------------------------------------------------
+
+@router.post(
+    "/",
+    response_model=UserResponse,
+    dependencies=[Depends(require_roles("ADMIN"))]
+)
+def create_user(
+    data: CreateUserRequest,
+    db: DBSession,
+    current_user: CurrentUser
+):
+    return service.create_user(db, data)
+
+
+# ------------------------------------------------
+# IMPORT EXCEL 🔥
+# ------------------------------------------------
+
+@router.post(
+    "/import-excel",
+    response_model=ImportExcelResponse,
+    dependencies=[Depends(require_roles("ADMIN"))]
+)
+def import_excel(
+    db: DBSession,
+    current_user: CurrentUser,
+    file: UploadFile = File(...)
+):
+    return service.import_users_from_excel(db, file.file)
