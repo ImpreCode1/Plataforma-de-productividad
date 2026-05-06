@@ -29,6 +29,9 @@ class IndicatorAssignment(Base):
     position_name_at_assignment = Column(String, nullable=True)
     area_at_assignment = Column(String, nullable=True)
     subarea_at_assignment = Column(String, nullable=True)
+    direccion_at_assignment = Column(String, nullable=True)
+    linea_at_assignment = Column(String, nullable=True)
+    numero_linea_at_assignment = Column(String, nullable=True)
 
     # Relaciones
     user = relationship("User", back_populates="assignments")

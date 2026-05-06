@@ -22,6 +22,9 @@ class UserResponse(BaseModel):
     position_name: Optional[str] = None
     area: Optional[str] = None
     subarea: Optional[str] = None
+    direccion: Optional[str] = None
+    linea: Optional[str] = None
+    numero_linea: Optional[str] = None
 
     hire_date: Optional[date] = None
     contract_type: Optional[str] = None
@@ -55,6 +58,9 @@ class UpdateUserRequest(BaseModel):
     position_name: Optional[str] = None
     area: Optional[str] = None
     subarea: Optional[str] = None
+    direccion: Optional[str] = None
+    linea: Optional[str] = None
+    numero_linea: Optional[str] = None
 
 
 class CreateUserRequest(BaseModel):
@@ -64,6 +70,9 @@ class CreateUserRequest(BaseModel):
     position_name: Optional[str] = None
     area: Optional[str] = None
     subarea: Optional[str] = None
+    direccion: Optional[str] = None
+    linea: Optional[str] = None
+    numero_linea: Optional[str] = None
 
 
 class ImportExcelResponse(BaseModel):

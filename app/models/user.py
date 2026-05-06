@@ -20,6 +20,9 @@ class User(Base):
     position_name = Column(String, nullable=True)
     area = Column(String, nullable=True)
     subarea = Column(String, nullable=True)
+    direccion = Column(String, nullable=True)
+    linea = Column(String, nullable=True)
+    numero_linea = Column(String, nullable=True)
 
     hire_date = Column(Date, nullable=True)
     contract_type = Column(String, nullable=True)

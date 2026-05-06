@@ -277,17 +277,30 @@ def import_assignments_from_excel(db: Session, file, year: int):
     updated = 0
     assignments_dict = {}
 
-    users_by_email = {}
+    users_by_name = {}
     all_users = db.query(User).all()
     for user in all_users:
-        users_by_email[user.email.lower()] = user
+        users_by_name[user.name.lower().strip()] = user
 
     for _, row in df.iterrows():
-        responsible_email = str(row["Responsable"]).lower().strip()
-        user = users_by_email.get(responsible_email)
+        responsible_name = str(row["Responsable"]).lower().strip()
+        user = users_by_name.get(responsible_name)
         
         if not user:
             continue
+
+        if pd.notna(row.get("Vicepresidencia")):
+            user.area = str(row["Vicepresidencia"]).strip()
+        if pd.notna(row.get("Área")):
+            user.subarea = str(row["Área"]).strip()
+        if pd.notna(row.get("Dirección")):
+            user.direccion = str(row["Dirección"]).strip()
+        if pd.notna(row.get("Linea")):
+            user.linea = str(row["Linea"]).strip()
+        if pd.notna(row.get("#Linea")):
+            user.numero_linea = str(row["#Linea"]).strip()
+        if pd.notna(row.get("Cargo")):
+            user.position_name = str(row["Cargo"]).strip()
 
         indicator_name = str(row["Nombre del Indicador"]).strip()
         
@@ -321,9 +334,12 @@ def import_assignments_from_excel(db: Session, file, year: int):
                 frequency=str(row.get("Frecuencia", "MONTHLY")) if pd.notna(row.get("Frecuencia")) else "MONTHLY",
                 start_month=start_month,
                 end_month=end_month,
-                position_name_at_assignment=user.position_name,
-                area_at_assignment=user.area,
-                subarea_at_assignment=user.subarea
+                position_name_at_assignment=str(row.get("Cargo", "").strip()) if pd.notna(row.get("Cargo")) else user.position_name,
+                area_at_assignment=str(row.get("Vicepresidencia", "").strip()) if pd.notna(row.get("Vicepresidencia")) else user.area,
+                subarea_at_assignment=str(row.get("Área", "").strip()) if pd.notna(row.get("Área")) else user.subarea,
+                direccion_at_assignment=str(row.get("Dirección", "").strip()) if pd.notna(row.get("Dirección")) else user.direccion,
+                linea_at_assignment=str(row.get("Linea", "").strip()) if pd.notna(row.get("Linea")) else user.linea,
+                numero_linea_at_assignment=str(row.get("#Linea", "").strip()) if pd.notna(row.get("#Linea")) else user.numero_linea
             )
             db.add(assignment)
             assignments_dict[(user.id, indicator_name)] = assignment
