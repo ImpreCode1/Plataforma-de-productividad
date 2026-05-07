@@ -1,5 +1,5 @@
 from uuid import UUID
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 from decimal import Decimal
 
@@ -54,6 +54,7 @@ class IndicatorAssignmentListResponse(BaseModel):
 class ImportAssignmentsResponse(BaseModel):
     created: int
     updated: int
+    failed: List[dict] = Field(default_factory=list)
     message: Optional[str] = None
 
 

@@ -1,13 +1,8 @@
-import logging
-
 from sqlalchemy.orm import Session
 from uuid import UUID
 from fastapi import HTTPException
 import pandas as pd
 import re
-import logging
-
-logger = logging.getLogger(__name__)
 
 from app.models.indicator_assignment import IndicatorAssignment
 from app.models.tracking import IndicatorTracking
@@ -263,6 +258,7 @@ def import_assignments_from_excel(db: Session, file, year: int, month: int = Non
 
     created = 0
     updated = 0
+    failed = []
 
     users_by_name = {}
     all_users = db.query(User).all()
@@ -277,7 +273,11 @@ def import_assignments_from_excel(db: Session, file, year: int, month: int = Non
             user = find_user_by_fuzzy_name(users_by_name, responsible_name)
         
         if not user:
-            logger.warning(f"Usuario no encontrado: {responsible_name}")
+            indicator_name = str(row.get("Nombre del Indicador", "")).strip()
+            failed.append({
+                "responsable": responsible_name,
+                "indicador": indicator_name
+            })
             continue
 
         if pd.notna(row.get("Vicepresidencia")):
@@ -348,7 +348,8 @@ def import_assignments_from_excel(db: Session, file, year: int, month: int = Non
 
     return {
         "created": created,
-        "updated": updated
+        "updated": updated,
+        "failed": failed
     }
 
 
