@@ -1,11 +1,47 @@
+import logging
+
 from sqlalchemy.orm import Session
 from uuid import UUID
 from fastapi import HTTPException
 import pandas as pd
+import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.models.indicator_assignment import IndicatorAssignment
 from app.models.tracking import IndicatorTracking
 from app.models.user import User
+
+
+def normalize_name(name):
+    if not name:
+        return name
+    return re.sub(r"\s+", " ", str(name).strip())
+
+
+def names_match(name1, name2, threshold=0.6):
+    if not name1 or not name2:
+        return False
+    words1 = set(normalize_name(name1).lower().split())
+    words2 = set(normalize_name(name2).lower().split())
+    if not words1 or not words2:
+        return False
+    intersection = words1 & words2
+    min_words = min(len(words1), len(words2))
+    if min_words == 0:
+        return False
+    return len(intersection) / min_words >= threshold
+
+
+def find_user_by_fuzzy_name(users_dict, target_name):
+    if not target_name:
+        return None
+    target = normalize_name(target_name).lower()
+    for key, user in users_dict.items():
+        if isinstance(key, str) and names_match(key.lower(), target):
+            return user
+    return None
 
 
 # ------------------------------------------------
@@ -213,6 +249,15 @@ MONTHS_MAP = {
     "septiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12
 }
 
+def safe_float(value, default=0):
+    if value is None or pd.isna(value):
+        return default
+    try:
+        return float(value)
+    except:
+        return default
+
+
 def import_assignments_from_excel(db: Session, file, year: int, month: int = None):
     df = pd.read_excel(file)
 
@@ -229,6 +274,10 @@ def import_assignments_from_excel(db: Session, file, year: int, month: int = Non
         user = users_by_name.get(responsible_name)
         
         if not user:
+            user = find_user_by_fuzzy_name(users_by_name, responsible_name)
+        
+        if not user:
+            logger.warning(f"Usuario no encontrado: {responsible_name}")
             continue
 
         if pd.notna(row.get("Vicepresidencia")):
@@ -247,8 +296,12 @@ def import_assignments_from_excel(db: Session, file, year: int, month: int = Non
         indicator_name = str(row["Nombre del Indicador"]).strip()
         
         if month is None:
-            month_col = str(row.get("Mes", "")).lower().strip()
-            month = MONTHS_MAP.get(month_col, 1)
+            for month_name, month_num in MONTHS_MAP.items():
+                if pd.notna(row.get(month_name)):
+                    month = month_num
+                    break
+            if month is None:
+                month = 1
 
         existing = db.query(IndicatorAssignment).filter(
             IndicatorAssignment.user_id == user.id,
@@ -258,18 +311,18 @@ def import_assignments_from_excel(db: Session, file, year: int, month: int = Non
         ).first()
 
         if existing:
-            existing.target_value = float(row.get("Meta", 0))
-            existing.weight = float(row.get("Peso", 0))
+            existing.target_value = safe_float(row.get("Meta"))
+            existing.weight = safe_float(row.get("Peso"))
             existing.formula = str(row.get("Formula del Indicador", "")) if pd.notna(row.get("Formula del Indicador")) else None
             existing.frequency = str(row.get("Frecuencia", "MONTHLY")) if pd.notna(row.get("Frecuencia")) else "MONTHLY"
             existing.year = year
             existing.month = month
-            existing.position_name_at_assignment = str(row.get("Cargo", "").strip()) if pd.notna(row.get("Cargo")) else user.position_name
-            existing.area_at_assignment = str(row.get("Vicepresidencia", "").strip()) if pd.notna(row.get("Vicepresidencia")) else user.area
-            existing.subarea_at_assignment = str(row.get("Área", "").strip()) if pd.notna(row.get("Área")) else user.subarea
-            existing.direccion_at_assignment = str(row.get("Dirección", "").strip()) if pd.notna(row.get("Dirección")) else user.direccion
-            existing.linea_at_assignment = str(row.get("Linea", "").strip()) if pd.notna(row.get("Linea")) else user.linea
-            existing.numero_linea_at_assignment = str(row.get("#Linea", "").strip()) if pd.notna(row.get("#Linea")) else user.numero_linea
+            existing.position_name_at_assignment = str(row.get("Cargo", "")).strip() if pd.notna(row.get("Cargo")) else user.position_name
+            existing.area_at_assignment = str(row.get("Vicepresidencia", "")).strip() if pd.notna(row.get("Vicepresidencia")) else user.area
+            existing.subarea_at_assignment = str(row.get("Área", "")).strip() if pd.notna(row.get("Área")) else user.subarea
+            existing.direccion_at_assignment = str(row.get("Dirección", "")).strip() if pd.notna(row.get("Dirección")) else user.direccion
+            existing.linea_at_assignment = str(row.get("Linea", "")).strip() if pd.notna(row.get("Linea")) else user.linea
+            existing.numero_linea_at_assignment = str(row.get("#Linea", "")).strip() if pd.notna(row.get("#Linea")) else user.numero_linea
             updated += 1
         else:
             assignment = IndicatorAssignment(
@@ -278,15 +331,15 @@ def import_assignments_from_excel(db: Session, file, year: int, month: int = Non
                 formula=str(row.get("Formula del Indicador", "")) if pd.notna(row.get("Formula del Indicador")) else None,
                 year=year,
                 month=month,
-                target_value=float(row.get("Meta", 0)),
-                weight=float(row.get("Peso", 0)),
+                target_value=safe_float(row.get("Meta")),
+                weight=safe_float(row.get("Peso")),
                 frequency=str(row.get("Frecuencia", "MONTHLY")) if pd.notna(row.get("Frecuencia")) else "MONTHLY",
-                position_name_at_assignment=str(row.get("Cargo", "").strip()) if pd.notna(row.get("Cargo")) else user.position_name,
-                area_at_assignment=str(row.get("Vicepresidencia", "").strip()) if pd.notna(row.get("Vicepresidencia")) else user.area,
-                subarea_at_assignment=str(row.get("Área", "").strip()) if pd.notna(row.get("Área")) else user.subarea,
-                direccion_at_assignment=str(row.get("Dirección", "").strip()) if pd.notna(row.get("Dirección")) else user.direccion,
-                linea_at_assignment=str(row.get("Linea", "").strip()) if pd.notna(row.get("Linea")) else user.linea,
-                numero_linea_at_assignment=str(row.get("#Linea", "").strip()) if pd.notna(row.get("#Linea")) else user.numero_linea
+                position_name_at_assignment=str(row.get("Cargo", "")).strip() if pd.notna(row.get("Cargo")) else user.position_name,
+                area_at_assignment=str(row.get("Vicepresidencia", "")).strip() if pd.notna(row.get("Vicepresidencia")) else user.area,
+                subarea_at_assignment=str(row.get("Área", "")).strip() if pd.notna(row.get("Área")) else user.subarea,
+                direccion_at_assignment=str(row.get("Dirección", "")).strip() if pd.notna(row.get("Dirección")) else user.direccion,
+                linea_at_assignment=str(row.get("Linea", "")).strip() if pd.notna(row.get("Linea")) else user.linea,
+                numero_linea_at_assignment=str(row.get("#Linea", "")).strip() if pd.notna(row.get("#Linea")) else user.numero_linea
             )
             db.add(assignment)
             created += 1

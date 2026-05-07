@@ -1,5 +1,5 @@
 from uuid import UUID
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form
 from typing import Optional
 
 from app.core.security.dependencies import DBSession, CurrentUser, require_roles
@@ -105,8 +105,8 @@ def delete_assignment(
 def import_assignments(
     db: DBSession,
     current_user: CurrentUser,
-    year: int,
-    month: int | None = None,
+    year: int = Form(...),
+    month: int | None = Form(None),
     file: UploadFile = File(...)
 ):
     return service.import_assignments_from_excel(db, file.file, year, month)
