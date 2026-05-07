@@ -81,6 +81,7 @@ def get_dashboard_by_user(db: Session, user_id: UUID, year: int, month: int = No
             continue
 
         result.append({
+            "id": str(assignment.id),
             "indicator_name": assignment.indicator_name,
             "formula": assignment.formula,
             "target_value": assignment.target_value,
