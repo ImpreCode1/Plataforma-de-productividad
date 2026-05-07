@@ -31,6 +31,7 @@ class UserResponse(BaseModel):
     salary_type: Optional[str] = None
 
     leader_id: Optional[UUID] = None
+    leader_name: Optional[str] = None
     is_active: bool = True
     roles: List[RoleOut] = Field(default_factory=list)
 

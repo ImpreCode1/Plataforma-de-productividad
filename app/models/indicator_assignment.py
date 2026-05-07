@@ -16,15 +16,13 @@ class IndicatorAssignment(Base):
     indicator_name = Column(String, nullable=False)
     formula = Column(Text, nullable=True)
     year = Column(Integer, nullable=False)
+    month = Column(Integer, nullable=True)
 
     target_value = Column(Numeric, nullable=False)
     weight = Column(Numeric, nullable=False)
     frequency = Column(String, default="MONTHLY")
 
     is_active = Column(Boolean, default=True)
-
-    start_month = Column(Integer, default=1)
-    end_month = Column(Integer, default=12)
 
     position_name_at_assignment = Column(String, nullable=True)
     area_at_assignment = Column(String, nullable=True)
