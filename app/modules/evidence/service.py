@@ -82,11 +82,7 @@ def check_evidence_ownership(db: Session, evidence_id, user_id):
     if not evidence:
         raise HTTPException(status_code=404, detail="Evidence not found")
 
-    tracking = db.query(IndicatorTracking).filter(
-        IndicatorTracking.id == evidence.tracking_id
-    ).first()
-
-    if tracking.user_id != user_id:
+    if evidence.user_id != user_id:
         raise HTTPException(status_code=403, detail="Not authorized")
 
 
@@ -121,38 +117,36 @@ def create_evidence(db: Session, file: UploadFile, user_id, tracking_id=None, ye
 
         db.add(evidence)
     else:
-        if not year or not month or not target_user_id:
-            raise HTTPException(status_code=400, detail="year, month and target_user_id required")
+        if not year or not month:
+            raise HTTPException(status_code=400, detail="year and month required")
 
         user_id_check = target_user_id or user_id
 
-        existing_trackings = db.query(IndicatorTracking).filter(
-            IndicatorTracking.user_id == user_id_check,
-            IndicatorTracking.year == year,
-            IndicatorTracking.month == month,
-            IndicatorTracking.is_closed == False
-        ).all()
-
-        if not existing_trackings:
-            raise HTTPException(status_code=404, detail="No active trackings found for this user/month")
-
-        evidences = []
-        for tracking in existing_trackings:
-            evidence = Evidence(
-                tracking_id=tracking.id,
-                user_id=user_id_check,
-                year=year,
-                month=month,
-                file_path=file_path,
-                uploaded_by=user_id,
-                uploaded_at=datetime.utcnow()
-            )
-            evidences.append(evidence)
-
-        db.add_all(evidences)
+        evidence = Evidence(
+            user_id=user_id_check,
+            year=year,
+            month=month,
+            file_path=file_path,
+            uploaded_by=user_id,
+            uploaded_at=datetime.utcnow()
+        )
+        db.add(evidence)
 
     db.commit()
-    return {"message": "Evidence uploaded to all indicators for this month"}
+    db.refresh(evidence)
+    return evidence
+
+
+# ------------------------------------------------
+# LIST EVIDENCE BY MONTH
+# ------------------------------------------------
+
+def list_evidences_by_month(db: Session, user_id, year, month):
+    return db.query(Evidence).filter(
+        Evidence.user_id == user_id,
+        Evidence.year == year,
+        Evidence.month == month
+    ).all()
 
 
 # ------------------------------------------------
