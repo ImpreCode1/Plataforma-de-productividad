@@ -1,4 +1,5 @@
 from uuid import UUID
+from typing import Optional
 from fastapi import APIRouter, Depends, Query
 
 from app.core.security.dependencies import DBSession, CurrentUser, require_roles
@@ -54,11 +55,12 @@ def get_user_dashboard(
     dependencies=[Depends(require_roles("LEADER", "ADMIN"))]
 )
 def get_team_dashboard(
-    year: int,
     db: DBSession,
-    current_user: CurrentUser
+    current_user: CurrentUser,
+    year: int = Query(default=...),
+    month: Optional[int] = Query(default=None),
 ):
-    return service.get_team_dashboard(db, current_user.id, year)
+    return service.get_team_dashboard(db, current_user.id, year, month)
 
 
 # ------------------------------------------------
@@ -70,8 +72,8 @@ def get_team_dashboard(
     response_model=dict
 )
 def get_global_dashboard(
-    year: int,
-    month: int = None,
+    year: int = Query(default=...),
+    month: Optional[int] = Query(default=None),
     db: DBSession = DBSession,
     current_user: CurrentUser = CurrentUser
 ):

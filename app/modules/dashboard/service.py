@@ -8,7 +8,7 @@ from app.models.action_plan import ActionPlan
 from app.models.evidence import Evidence
 
 
-def get_dashboard_by_user(db: Session, user_id: UUID, year: int):
+def get_dashboard_by_user(db: Session, user_id: UUID, year: int, month: int = None):
 
     assignments = db.query(IndicatorAssignment).filter(
         IndicatorAssignment.user_id == user_id,
@@ -26,37 +26,59 @@ def get_dashboard_by_user(db: Session, user_id: UUID, year: int):
 
         months = []
 
-        for t in trackings:
-            # Obtener planes de acción
-            action_plans = db.query(ActionPlan).filter(
-                ActionPlan.tracking_id == t.id
-            ).all()
-            
-            plans_data = []
-            for plan in action_plans:
-                plans_data.append({
-                    "id": str(plan.id),
-                    "reason_not_met": plan.reason_not_met,
-                    "action_plan": plan.action_plan,
-                    "created_at": plan.created_at.isoformat() if plan.created_at else None
-                })
+        if trackings:
+            for t in trackings:
+                if month and t.month != month:
+                    continue
 
-            # Contar evidencias
-            evidence_count = db.query(Evidence).filter(
-                Evidence.tracking_id == t.id
-            ).count()
+                action_plans = db.query(ActionPlan).filter(
+                    ActionPlan.tracking_id == t.id
+                ).all()
+                
+                plans_data = []
+                for plan in action_plans:
+                    plans_data.append({
+                        "id": str(plan.id),
+                        "reason_not_met": plan.reason_not_met,
+                        "action_plan": plan.action_plan,
+                        "created_at": plan.created_at.isoformat() if plan.created_at else None
+                    })
+
+                evidence_count = db.query(Evidence).filter(
+                    Evidence.tracking_id == t.id
+                ).count()
+
+                months.append({
+                    "month": t.month,
+                    "achieved_value": t.achieved_value,
+                    "achieved_total": t.achieved_total,
+                    "achievement_percentage": t.achievement_percentage,
+                    "status": t.status,
+                    "is_closed": t.is_closed,
+                    "tracking_id": str(t.id),
+                    "action_plans": plans_data,
+                    "evidence_count": evidence_count
+                })
+        else:
+            month_val = assignment.month
+            
+            if month and month_val != month:
+                continue
 
             months.append({
-                "month": t.month,
-                "achieved_value": t.achieved_value,
-                "achieved_total": t.achieved_total,
-                "achievement_percentage": t.achievement_percentage,
-                "status": t.status,
-                "is_closed": t.is_closed,
-                "tracking_id": t.id,
-                "action_plans": plans_data,
-                "evidence_count": evidence_count
+                "month": month_val,
+                "achieved_value": None,
+                "achieved_total": None,
+                "achievement_percentage": None,
+                "status": "PENDING",
+                "is_closed": False,
+                "tracking_id": None,
+                "action_plans": [],
+                "evidence_count": 0
             })
+
+        if month and not months:
+            continue
 
         result.append({
             "indicator_name": assignment.indicator_name,
@@ -69,10 +91,11 @@ def get_dashboard_by_user(db: Session, user_id: UUID, year: int):
     return {
         "user_id": user_id,
         "year": year,
+        "month": month,
         "indicators": result
     }
     
-def get_team_dashboard(db: Session, leader_id: UUID, year: int):
+def get_team_dashboard(db: Session, leader_id: UUID, year: int, month: int = None):
 
     # 1. Obtener subordinados
     team = db.query(User).filter(
@@ -85,7 +108,7 @@ def get_team_dashboard(db: Session, leader_id: UUID, year: int):
     for user in team:
 
         # reutilizamos función existente 🔥
-        user_dashboard = get_dashboard_by_user(db, user.id, year)
+        user_dashboard = get_dashboard_by_user(db, user.id, year, month)
 
         result.append({
             "user_id": user.id,
@@ -98,6 +121,7 @@ def get_team_dashboard(db: Session, leader_id: UUID, year: int):
     return {
         "leader_id": leader_id,
         "year": year,
+        "month": month,
         "team": result
     }
 
