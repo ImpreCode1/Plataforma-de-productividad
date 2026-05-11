@@ -248,6 +248,9 @@ def safe_float(value, default=0):
     if value is None or pd.isna(value):
         return default
     try:
+        str_value = str(value).strip()
+        if str_value.endswith('%'):
+            return float(str_value[:-1])
         return float(value)
     except:
         return default
