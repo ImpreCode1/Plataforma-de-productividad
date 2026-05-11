@@ -250,8 +250,12 @@ def safe_float(value, default=0):
     try:
         str_value = str(value).strip()
         if str_value.endswith('%'):
-            return float(str_value[:-1])
-        return float(value)
+            str_value = str_value[:-1].replace(',', '.')
+            return float(str_value)
+        float_val = float(value)
+        if 0 < float_val <= 1:
+            return round(float_val * 100, 2)
+        return round(float_val, 2)
     except:
         return default
 
@@ -291,8 +295,8 @@ def import_assignments_from_excel(db: Session, file, year: int, month: int = Non
             user.direccion = str(row["Dirección"]).strip()
         if pd.notna(row.get("Linea")):
             user.linea = str(row["Linea"]).strip()
-        if pd.notna(row.get("#Linea")):
-            user.numero_linea = str(row["#Linea"]).strip()
+        if pd.notna(row.get("# Linea")):
+            user.numero_linea = str(row["# Linea"]).strip()
         if pd.notna(row.get("Cargo")):
             user.position_name = str(row["Cargo"]).strip()
 
@@ -325,7 +329,7 @@ def import_assignments_from_excel(db: Session, file, year: int, month: int = Non
             existing.subarea_at_assignment = str(row.get("Área", "")).strip() if pd.notna(row.get("Área")) else user.subarea
             existing.direccion_at_assignment = str(row.get("Dirección", "")).strip() if pd.notna(row.get("Dirección")) else user.direccion
             existing.linea_at_assignment = str(row.get("Linea", "")).strip() if pd.notna(row.get("Linea")) else user.linea
-            existing.numero_linea_at_assignment = str(row.get("#Linea", "")).strip() if pd.notna(row.get("#Linea")) else user.numero_linea
+            existing.numero_linea_at_assignment = str(row.get("# Linea", "")).strip() if pd.notna(row.get("# Linea")) else user.numero_linea
             updated += 1
         else:
             assignment = IndicatorAssignment(
@@ -342,7 +346,7 @@ def import_assignments_from_excel(db: Session, file, year: int, month: int = Non
                 subarea_at_assignment=str(row.get("Área", "")).strip() if pd.notna(row.get("Área")) else user.subarea,
                 direccion_at_assignment=str(row.get("Dirección", "")).strip() if pd.notna(row.get("Dirección")) else user.direccion,
                 linea_at_assignment=str(row.get("Linea", "")).strip() if pd.notna(row.get("Linea")) else user.linea,
-                numero_linea_at_assignment=str(row.get("#Linea", "")).strip() if pd.notna(row.get("#Linea")) else user.numero_linea
+                numero_linea_at_assignment=str(row.get("# Linea", "")).strip() if pd.notna(row.get("# Linea")) else user.numero_linea
             )
             db.add(assignment)
             created += 1
