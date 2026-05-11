@@ -37,25 +37,24 @@ def list_team_action_plans(db: Session, leader_id: UUID, year: int):
 
         if action_plans:
             for plan in action_plans:
-                # Get user info
                 user = db.query(User).filter(User.id == tracking.user_id).first()
                 
-                # Get indicator info
                 indicator_name = tracking.assignment.indicator_name if tracking.assignment else "Sin indicador"
                 target_value = tracking.assignment.target_value if tracking.assignment else 0
 
-                # Calculate achievement
                 achieved_percentage = None
-                if tracking.achieved_value and tracking.achieved_total:
+                if tracking.achievement_percentage is not None:
+                    achieved_percentage = float(tracking.achievement_percentage)
+                elif tracking.achieved_value and tracking.achieved_total:
                     achieved_percentage = (float(tracking.achieved_value) / float(tracking.achieved_total)) * 100
 
                 result.append({
                     "id": str(plan.id),
                     "tracking_id": str(tracking.id),
-                    "user_id": str(tracking.user_id),
-                    "user_name": user.name if user else "Sin nombre",
-                    "user_email": user.email if user else "",
-                    "position_name": user.position_name if user else "",
+                    "user_id": str(tracking.user_id) if tracking.user_id else None,
+                    "user_name": user.name if user and user.name else "Sin asignar",
+                    "user_email": user.email if user and user.email else "",
+                    "position_name": user.position_name if user and user.position_name else "",
                     "indicator_name": indicator_name,
                     "target_value": target_value,
                     "achieved_value": float(tracking.achieved_value) if tracking.achieved_value else None,
@@ -95,12 +94,17 @@ def list_my_action_plans(db: Session, user_id: UUID, year: int):
                 target_value = tracking.assignment.target_value if tracking.assignment else 0
 
                 achieved_percentage = None
-                if tracking.achieved_value and tracking.achieved_total:
+                if tracking.achievement_percentage is not None:
+                    achieved_percentage = float(tracking.achievement_percentage)
+                elif tracking.achieved_value and tracking.achieved_total:
                     achieved_percentage = (float(tracking.achieved_value) / float(tracking.achieved_total)) * 100
 
                 result.append({
                     "id": str(plan.id),
                     "tracking_id": str(tracking.id),
+                    "user_id": str(tracking.user_id) if tracking.user_id else None,
+                    "user_name": "",
+                    "position_name": "",
                     "indicator_name": indicator_name,
                     "target_value": target_value,
                     "achieved_value": float(tracking.achieved_value) if tracking.achieved_value else None,
