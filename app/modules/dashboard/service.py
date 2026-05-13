@@ -152,34 +152,40 @@ def get_global_dashboard(db: Session, year: int, month: int = None):
 
     for user in all_users:
         is_leader = db.query(User).filter(User.leader_id == user.id).count() > 0
-        
+
         is_admin_role = any(
-            ur.role.name == "ADMIN" 
-            for ur in user.roles if ur.role
-        ) if user.roles else False
-        
-        is_leader_role = any(
-            ur.role.name == "LEADER" 
+            ur.role.name == "ADMIN"
             for ur in user.roles if ur.role
         ) if user.roles else False
 
-        assignments = db.query(IndicatorAssignment).filter(
+        is_leader_role = any(
+            ur.role.name == "LEADER"
+            for ur in user.roles if ur.role
+        ) if user.roles else False
+
+        all_assignments = db.query(IndicatorAssignment).filter(
             IndicatorAssignment.user_id == user.id,
             IndicatorAssignment.year == year,
             IndicatorAssignment.is_active == True
         ).all()
 
-        user_indicators = len(assignments)
+        if filter_month:
+            assignments = [a for a in all_assignments if a.month == filter_month]
+            user_indicators = len(assignments)
+        else:
+            assignments = all_assignments
+            user_indicators = len(all_assignments)
+
         total_indicators += user_indicators
 
         query = db.query(IndicatorTracking).filter(
             IndicatorTracking.user_id == user.id,
             IndicatorTracking.year == year
         )
-        
+
         if filter_month:
             query = query.filter(IndicatorTracking.month == filter_month)
-        
+
         trackings = query.all()
 
         tracked_count = len([t for t in trackings if t.status in ["COMPLETED", "CLOSED"]])
@@ -190,25 +196,35 @@ def get_global_dashboard(db: Session, year: int, month: int = None):
         user_plans = 0
         user_evidence = 0
 
+        evidence_from_trackings = 0
         for t in trackings:
             plans = db.query(ActionPlan).filter(
                 ActionPlan.tracking_id == t.id
             ).count()
             user_plans += plans
 
-            evidence = db.query(Evidence).filter(
+            evidence_from_trackings += db.query(Evidence).filter(
                 Evidence.tracking_id == t.id
             ).count()
-            user_evidence += evidence
 
             if t.month in monthly_stats:
                 monthly_stats[t.month]["total"] += 1
                 if t.is_closed:
                     monthly_stats[t.month]["closed"] += 1
                 monthly_stats[t.month]["plans"] += plans
-                monthly_stats[t.month]["evidence"] += evidence
+                monthly_stats[t.month]["evidence"] += 1
                 if t.weighted_score:
                     monthly_stats[t.month]["score"] += t.weighted_score
+
+        evidence_without_tracking = db.query(Evidence).filter(
+            Evidence.user_id == user.id,
+            Evidence.year == year
+        )
+        if filter_month:
+            evidence_without_tracking = evidence_without_tracking.filter(Evidence.month == filter_month)
+        evidence_without_tracking = evidence_without_tracking.filter(Evidence.tracking_id == None).count()
+
+        user_evidence = evidence_from_trackings + evidence_without_tracking
 
         total_action_plans += user_plans
         total_evidence += user_evidence
