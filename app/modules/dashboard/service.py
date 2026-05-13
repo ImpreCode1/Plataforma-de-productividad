@@ -277,11 +277,6 @@ def get_global_dashboard(db: Session, year: int, month: int = None):
 
     teams_data = {}
     for user in team_summary:
-        is_standalone_leader = user.get("is_leader", False) and not user.get("is_admin_role", False)
-        
-        if is_standalone_leader:
-            continue
-            
         leader = user["leader_name"]
         if leader not in teams_data:
             teams_data[leader] = {
@@ -306,23 +301,6 @@ def get_global_dashboard(db: Session, year: int, month: int = None):
         team["members"].sort(key=lambda x: x["score"], reverse=True)
 
     teams_list = sorted(teams_data.values(), key=lambda x: x["avg_score"], reverse=True)
-
-    users_without_leader = [
-        u for u in team_summary 
-        if (u["leader_name"] == "Sin líder" or not u["leader_name"]) 
-        and not u.get("is_leader", False)
-        and not u.get("is_leader_role", False)
-    ]
-    if users_without_leader:
-        teams_list.append({
-            "leader_name": "Sin líder",
-            "members": users_without_leader,
-            "total_indicators": sum(u["indicators_count"] for u in users_without_leader),
-            "total_closed": sum(u["closed_months"] for u in users_without_leader),
-            "total_plans": sum(u["action_plans"] for u in users_without_leader),
-            "total_evidence": sum(u["evidence_count"] for u in users_without_leader),
-            "avg_score": round(sum(u["score"] for u in users_without_leader) / len(users_without_leader), 2) if users_without_leader else 0
-        })
 
     monthly_summary = []
     for m in range(1, 13):
