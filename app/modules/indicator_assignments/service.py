@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import HTTPException
 import pandas as pd
 import re
+import unicodedata
 
 from app.models.indicator_assignment import IndicatorAssignment
 from app.models.tracking import IndicatorTracking
@@ -12,7 +13,10 @@ from app.models.user import User
 def normalize_name(name):
     if not name:
         return name
-    return re.sub(r"\s+", " ", str(name).strip())
+    name = str(name)
+    name = unicodedata.normalize('NFD', name)
+    name = ''.join(c for c in name if not unicodedata.combining(c))
+    return re.sub(r"\s+", " ", name.strip()).lower()
 
 
 def names_match(name1, name2, threshold=0.6):
@@ -270,15 +274,17 @@ def import_assignments_from_excel(db: Session, file, year: int, month: int = Non
     users_by_name = {}
     all_users = db.query(User).all()
     for user in all_users:
-        users_by_name[user.name.lower().strip()] = user
+        normalized = normalize_name(user.name)
+        users_by_name[normalized] = user
 
     for _, row in df.iterrows():
-        responsible_name = str(row["Responsable"]).lower().strip()
-        user = users_by_name.get(responsible_name)
-        
+        responsible_name = str(row["Responsable"]).strip()
+        normalized_name = normalize_name(responsible_name)
+        user = users_by_name.get(normalized_name)
+
         if not user:
             user = find_user_by_fuzzy_name(users_by_name, responsible_name)
-        
+
         if not user:
             indicator_name = str(row.get("Nombre del Indicador", "")).strip()
             failed.append({
