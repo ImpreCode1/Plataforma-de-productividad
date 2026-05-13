@@ -241,35 +241,68 @@ def get_global_dashboard(db: Session, year: int, month: int = None):
             if scores:
                 user_score = sum(scores) / len(scores)
 
-        indicators_detail = []
+        indicators_by_name = {}
         for assignment in assignments:
             trackings_ind = [t for t in trackings if t.assignment_id == assignment.id]
-            
-            months_detail = []
-            for t in trackings_ind:
-                plans_count = db.query(ActionPlan).filter(ActionPlan.tracking_id == t.id).count()
-                evidence_count = db.query(Evidence).filter(Evidence.tracking_id == t.id).count()
-                
-                months_detail.append({
-                    "month": t.month,
-                    "is_closed": t.is_closed,
-                    "achieved_value": float(t.achieved_value) if t.achieved_value else None,
-                    "achieved_total": float(t.achieved_total) if t.achieved_total else None,
-                    "achievement_percentage": float(t.achievement_percentage) if t.achievement_percentage else None,
-                    "weighted_score": float(t.weighted_score) if t.weighted_score else None,
-                    "target_met": t.target_met,
-                    "plans_count": plans_count,
-                    "evidence_count": evidence_count,
-                    "has_action_plan": plans_count > 0,
-                    "has_evidence": evidence_count > 0,
-                })
 
-            indicators_detail.append({
-                "indicator_name": assignment.indicator_name,
-                "weight": assignment.weight,
-                "target_value": assignment.target_value,
-                "months": months_detail
-            })
+            if trackings_ind:
+                for t in trackings_ind:
+                    if filter_month and t.month != filter_month:
+                        continue
+
+                    plans_count = db.query(ActionPlan).filter(ActionPlan.tracking_id == t.id).count()
+                    evidence_count = db.query(Evidence).filter(Evidence.tracking_id == t.id).count()
+
+                    month_data = {
+                        "month": t.month,
+                        "is_closed": t.is_closed,
+                        "achieved_value": float(t.achieved_value) if t.achieved_value else None,
+                        "achieved_total": float(t.achieved_total) if t.achieved_total else None,
+                        "achievement_percentage": float(t.achievement_percentage) if t.achievement_percentage else None,
+                        "weighted_score": float(t.weighted_score) if t.weighted_score else None,
+                        "target_met": t.target_met,
+                        "plans_count": plans_count,
+                        "evidence_count": evidence_count,
+                        "has_action_plan": plans_count > 0,
+                        "has_evidence": evidence_count > 0,
+                    }
+
+                    if assignment.indicator_name not in indicators_by_name:
+                        indicators_by_name[assignment.indicator_name] = {
+                            "indicator_name": assignment.indicator_name,
+                            "weight": assignment.weight,
+                            "target_value": assignment.target_value,
+                            "months": []
+                        }
+                    indicators_by_name[assignment.indicator_name]["months"].append(month_data)
+            else:
+                if filter_month and assignment.month != filter_month:
+                    continue
+
+                month_data = {
+                    "month": assignment.month,
+                    "is_closed": False,
+                    "achieved_value": None,
+                    "achieved_total": None,
+                    "achievement_percentage": None,
+                    "weighted_score": None,
+                    "target_met": None,
+                    "plans_count": 0,
+                    "evidence_count": 0,
+                    "has_action_plan": False,
+                    "has_evidence": False,
+                }
+
+                if assignment.indicator_name not in indicators_by_name:
+                    indicators_by_name[assignment.indicator_name] = {
+                        "indicator_name": assignment.indicator_name,
+                        "weight": assignment.weight,
+                        "target_value": assignment.target_value,
+                        "months": []
+                    }
+                indicators_by_name[assignment.indicator_name]["months"].append(month_data)
+
+        indicators_detail = list(indicators_by_name.values())
 
         team_summary.append({
             "user_id": str(user.id),
