@@ -268,7 +268,10 @@ def get_global_dashboard(db: Session, year: int, month: int = None):
                         continue
 
                     plans_count = db.query(ActionPlan).filter(ActionPlan.tracking_id == t.id).count()
-                    evidence_count = db.query(Evidence).filter(Evidence.tracking_id == t.id).count()
+                    evidence_count = db.query(Evidence).filter(
+                        (Evidence.tracking_id == t.id) |
+                        ((Evidence.tracking_id == None) & (Evidence.user_id == t.user_id) & (Evidence.year == t.year) & (Evidence.month == t.month))
+                    ).count()
 
                     month_data = {
                         "month": t.month,
