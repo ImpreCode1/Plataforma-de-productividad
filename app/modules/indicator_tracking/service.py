@@ -218,3 +218,68 @@ def close_tracking(db: Session, tracking_id: UUID, achieved_value=None, achieved
     db.refresh(tracking)
 
     return tracking
+
+
+# ------------------------------------------------
+# CLOSE ASSIGNMENT DIRECTLY (NEW MODEL)
+# ------------------------------------------------
+
+def close_assignment_direct(db: Session, assignment_id: UUID, achieved_value=None, achieved_total=None, user_id: UUID = None):
+    assignment = db.query(IndicatorAssignment).filter(
+        IndicatorAssignment.id == assignment_id
+    ).first()
+
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+
+    if not assignment.is_active:
+        raise HTTPException(status_code=400, detail="Assignment is not active")
+
+    tracking = db.query(IndicatorTracking).filter(
+        IndicatorTracking.assignment_id == assignment_id
+    ).first()
+
+    if tracking:
+        if tracking.is_closed:
+            raise HTTPException(status_code=400, detail="Already closed")
+    else:
+        tracking = IndicatorTracking(
+            user_id=assignment.user_id,
+            assignment_id=assignment_id,
+            year=assignment.year,
+            month=assignment.month,
+            status="PENDING",
+            is_closed=False
+        )
+        db.add(tracking)
+        db.flush()
+
+    if achieved_value is not None:
+        tracking.achieved_value = achieved_value
+        tracking.achieved_total = achieved_total
+        
+        if achieved_total is not None and achieved_total > 0:
+            achievement_percentage = (achieved_value / achieved_total) * 100
+        elif assignment.target_value is not None and assignment.target_value > 0:
+            achievement_percentage = (achieved_value / assignment.target_value) * 100
+        else:
+            achievement_percentage = 0
+
+        weighted_score = (achievement_percentage * (assignment.weight or 0)) / 100
+
+        tracking.achievement_percentage = round(achievement_percentage, 2)
+        tracking.weighted_score = round(weighted_score, 2)
+        
+        target_met = False
+        if assignment.target_value is not None:
+            target_met = achievement_percentage >= assignment.target_value
+        
+        tracking.target_met = target_met
+        tracking.status = "COMPLETED"
+
+    tracking.is_closed = True
+
+    db.commit()
+    db.refresh(tracking)
+
+    return tracking

@@ -1,5 +1,5 @@
 from uuid import UUID
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 from decimal import Decimal
 
@@ -9,11 +9,10 @@ class IndicatorAssignmentCreate(BaseModel):
     indicator_name: str
     formula: Optional[str] = None
     year: int
+    month: Optional[int] = None
     target_value: Decimal
     weight: Decimal
     frequency: str = "MONTHLY"
-    start_month: Optional[int] = None
-    end_month: Optional[int] = None
 
 
 class IndicatorAssignmentUpdate(BaseModel):
@@ -23,8 +22,7 @@ class IndicatorAssignmentUpdate(BaseModel):
     weight: Optional[Decimal] = None
     frequency: Optional[str] = None
     is_active: Optional[bool] = None
-    start_month: Optional[int] = None
-    end_month: Optional[int] = None
+    month: Optional[int] = None
 
 
 class IndicatorAssignmentResponse(BaseModel):
@@ -33,15 +31,17 @@ class IndicatorAssignmentResponse(BaseModel):
     indicator_name: str
     formula: Optional[str] = None
     year: int
+    month: Optional[int] = None
     target_value: Decimal
     weight: Decimal
     frequency: str
     is_active: bool
-    start_month: int
-    end_month: int
     position_name_at_assignment: Optional[str] = None
     area_at_assignment: Optional[str] = None
     subarea_at_assignment: Optional[str] = None
+    direccion_at_assignment: Optional[str] = None
+    linea_at_assignment: Optional[str] = None
+    numero_linea_at_assignment: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -54,10 +54,8 @@ class IndicatorAssignmentListResponse(BaseModel):
 class ImportAssignmentsResponse(BaseModel):
     created: int
     updated: int
-
-
-class CloseAssignmentRequest(BaseModel):
-    close_month: int
+    failed: List[dict] = Field(default_factory=list)
+    message: Optional[str] = None
 
 
 class IndicatorData(BaseModel):
@@ -68,5 +66,5 @@ class IndicatorData(BaseModel):
 
 
 class ReopenAssignmentRequest(BaseModel):
-    new_start_month: int
+    month: int
     indicators: dict[str, IndicatorData]

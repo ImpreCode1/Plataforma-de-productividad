@@ -1,9 +1,9 @@
 from uuid import UUID
-from fastapi import APIRouter, UploadFile, File, Depends, Query
+from fastapi import APIRouter, UploadFile, File, Form, Depends, Query
 
 from app.core.security.dependencies import DBSession, CurrentUser, require_roles
 from app.modules.evidence import service
-from app.modules.evidence.schemas import EvidenceResponse
+from app.modules.evidence.schemas import EvidenceResponse, EvidenceListResponse
 
 router = APIRouter(
     prefix="/evidence",
@@ -19,13 +19,30 @@ router = APIRouter(
 def upload_evidence_to_month(
     db: DBSession,
     current_user: CurrentUser,
-    year: int = Query(...),
-    month: int = Query(...),
-    target_user_id: UUID = Query(None),
+    year: int = Form(...),
+    month: int = Form(...),
+    target_user_id: UUID = Form(None),
     file: UploadFile = File(...)
 ):
     user_id = target_user_id or current_user.id
     return service.create_evidence(db, file, current_user.id, year=year, month=month, target_user_id=user_id)
+
+
+# ------------------------------------------------
+# LIST BY MONTH (EMPLOYEE: own, LEADER: team, ADMIN: all)
+# ------------------------------------------------
+
+@router.get("/", response_model=EvidenceListResponse, dependencies=[Depends(require_roles("EMPLOYEE", "LEADER", "ADMIN"))])
+def list_evidences_by_month(
+    db: DBSession,
+    current_user: CurrentUser,
+    year: int = Query(...),
+    month: int = Query(...),
+    target_user_id: UUID = Query(None),
+):
+    user_id = target_user_id or current_user.id
+    evidences = service.list_evidences_by_month(db, user_id, year, month)
+    return {"evidences": evidences}
 
 
 # ------------------------------------------------

@@ -1,5 +1,5 @@
 from uuid import UUID
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form
 from typing import Optional
 
 from app.core.security.dependencies import DBSession, CurrentUser, require_roles
@@ -10,7 +10,6 @@ from app.modules.indicator_assignments.schemas import (
     IndicatorAssignmentListResponse,
     IndicatorAssignmentUpdate,
     ImportAssignmentsResponse,
-    CloseAssignmentRequest,
     ReopenAssignmentRequest
 )
 
@@ -50,11 +49,12 @@ def list_assignments(
     current_user: CurrentUser,
     user_id: UUID | None = None,
     year: int | None = None,
+    month: int | None = None,
 ):
     if user_id and year:
-        assignments = service.list_assignments(db, user_id, year)
+        assignments = service.list_assignments(db, user_id, year, month)
     else:
-        assignments = service.list_all_assignments(db, year)
+        assignments = service.list_all_assignments(db, year, month)
     return {"assignments": assignments}
 
 
@@ -105,10 +105,11 @@ def delete_assignment(
 def import_assignments(
     db: DBSession,
     current_user: CurrentUser,
-    year: int,
+    year: int = Form(...),
+    month: int | None = Form(None),
     file: UploadFile = File(...)
 ):
-    return service.import_assignments_from_excel(db, file.file, year)
+    return service.import_assignments_from_excel(db, file.file, year, month)
 
 
 # ------------------------------------------------
@@ -122,11 +123,10 @@ def import_assignments(
 )
 def close_assignment(
     assignment_id: UUID,
-    data: CloseAssignmentRequest,
     db: DBSession,
     current_user: CurrentUser
 ):
-    return service.close_assignment(db, assignment_id, data.close_month)
+    return service.close_assignment(db, assignment_id)
 
 
 # ------------------------------------------------
@@ -145,6 +145,24 @@ def reopen_assignment(
     current_user: CurrentUser
 ):
     assignments = service.reopen_assignment(
-        db, assignment_id, data.new_start_month, data.indicators
+        db, assignment_id, data.month, data.indicators
     )
     return {"assignments": [a for a, _ in assignments]}
+
+
+# ------------------------------------------------
+# CLONE FROM PREVIOUS MONTH
+# ------------------------------------------------
+
+@router.post(
+    "/clone-previous-month",
+    response_model=ImportAssignmentsResponse,
+    dependencies=[Depends(require_roles("ADMIN"))]
+)
+def clone_from_previous_month(
+    db: DBSession,
+    current_user: CurrentUser,
+    year: int,
+    month: int
+):
+    return service.clone_from_previous_month(db, year, month)

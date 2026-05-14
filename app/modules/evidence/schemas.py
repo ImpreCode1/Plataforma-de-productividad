@@ -1,6 +1,6 @@
 from uuid import UUID
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 
@@ -16,3 +16,7 @@ class EvidenceResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class EvidenceListResponse(BaseModel):
+    evidences: List[EvidenceResponse]

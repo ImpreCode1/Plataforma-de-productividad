@@ -8,7 +8,7 @@ from app.models.action_plan import ActionPlan
 from app.models.evidence import Evidence
 
 
-def get_dashboard_by_user(db: Session, user_id: UUID, year: int):
+def get_dashboard_by_user(db: Session, user_id: UUID, year: int, month: int = None):
 
     assignments = db.query(IndicatorAssignment).filter(
         IndicatorAssignment.user_id == user_id,
@@ -26,39 +26,62 @@ def get_dashboard_by_user(db: Session, user_id: UUID, year: int):
 
         months = []
 
-        for t in trackings:
-            # Obtener planes de acción
-            action_plans = db.query(ActionPlan).filter(
-                ActionPlan.tracking_id == t.id
-            ).all()
-            
-            plans_data = []
-            for plan in action_plans:
-                plans_data.append({
-                    "id": str(plan.id),
-                    "reason_not_met": plan.reason_not_met,
-                    "action_plan": plan.action_plan,
-                    "created_at": plan.created_at.isoformat() if plan.created_at else None
-                })
+        if trackings:
+            for t in trackings:
+                if month and t.month != month:
+                    continue
 
-            # Contar evidencias
-            evidence_count = db.query(Evidence).filter(
-                Evidence.tracking_id == t.id
-            ).count()
+                action_plans = db.query(ActionPlan).filter(
+                    ActionPlan.tracking_id == t.id
+                ).all()
+                
+                plans_data = []
+                for plan in action_plans:
+                    plans_data.append({
+                        "id": str(plan.id),
+                        "reason_not_met": plan.reason_not_met,
+                        "action_plan": plan.action_plan,
+                        "created_at": plan.created_at.isoformat() if plan.created_at else None
+                    })
+
+                evidence_count = db.query(Evidence).filter(
+                    Evidence.tracking_id == t.id
+                ).count()
+
+                months.append({
+                    "month": t.month,
+                    "achieved_value": t.achieved_value,
+                    "achieved_total": t.achieved_total,
+                    "achievement_percentage": t.achievement_percentage,
+                    "status": t.status,
+                    "is_closed": t.is_closed,
+                    "tracking_id": str(t.id),
+                    "action_plans": plans_data,
+                    "evidence_count": evidence_count
+                })
+        else:
+            month_val = assignment.month
+            
+            if month and month_val != month:
+                continue
 
             months.append({
-                "month": t.month,
-                "achieved_value": t.achieved_value,
-                "achieved_total": t.achieved_total,
-                "achievement_percentage": t.achievement_percentage,
-                "status": t.status,
-                "is_closed": t.is_closed,
-                "tracking_id": t.id,
-                "action_plans": plans_data,
-                "evidence_count": evidence_count
+                "month": month_val,
+                "achieved_value": None,
+                "achieved_total": None,
+                "achievement_percentage": None,
+                "status": "PENDING",
+                "is_closed": False,
+                "tracking_id": None,
+                "action_plans": [],
+                "evidence_count": 0
             })
 
+        if month and not months:
+            continue
+
         result.append({
+            "id": str(assignment.id),
             "indicator_name": assignment.indicator_name,
             "formula": assignment.formula,
             "target_value": assignment.target_value,
@@ -69,10 +92,11 @@ def get_dashboard_by_user(db: Session, user_id: UUID, year: int):
     return {
         "user_id": user_id,
         "year": year,
+        "month": month,
         "indicators": result
     }
     
-def get_team_dashboard(db: Session, leader_id: UUID, year: int):
+def get_team_dashboard(db: Session, leader_id: UUID, year: int, month: int = None):
 
     # 1. Obtener subordinados
     team = db.query(User).filter(
@@ -85,7 +109,7 @@ def get_team_dashboard(db: Session, leader_id: UUID, year: int):
     for user in team:
 
         # reutilizamos función existente 🔥
-        user_dashboard = get_dashboard_by_user(db, user.id, year)
+        user_dashboard = get_dashboard_by_user(db, user.id, year, month)
 
         result.append({
             "user_id": user.id,
@@ -98,6 +122,7 @@ def get_team_dashboard(db: Session, leader_id: UUID, year: int):
     return {
         "leader_id": leader_id,
         "year": year,
+        "month": month,
         "team": result
     }
 
@@ -127,34 +152,41 @@ def get_global_dashboard(db: Session, year: int, month: int = None):
 
     for user in all_users:
         is_leader = db.query(User).filter(User.leader_id == user.id).count() > 0
-        
+
         is_admin_role = any(
-            ur.role.name == "ADMIN" 
-            for ur in user.roles if ur.role
-        ) if user.roles else False
-        
-        is_leader_role = any(
-            ur.role.name == "LEADER" 
+            ur.role.name == "ADMIN"
             for ur in user.roles if ur.role
         ) if user.roles else False
 
-        assignments = db.query(IndicatorAssignment).filter(
+        is_leader_role = any(
+            ur.role.name == "LEADER"
+            for ur in user.roles if ur.role
+        ) if user.roles else False
+
+        all_assignments = db.query(IndicatorAssignment).filter(
             IndicatorAssignment.user_id == user.id,
             IndicatorAssignment.year == year,
             IndicatorAssignment.is_active == True
         ).all()
 
-        user_indicators = len(assignments)
+        if filter_month:
+            assignments = [a for a in all_assignments if a.month == filter_month]
+        else:
+            assignments = all_assignments
+        
+        unique_indicators = set(a.indicator_name for a in assignments if a.indicator_name)
+        user_indicators = len(unique_indicators)
+
         total_indicators += user_indicators
 
         query = db.query(IndicatorTracking).filter(
             IndicatorTracking.user_id == user.id,
             IndicatorTracking.year == year
         )
-        
+
         if filter_month:
             query = query.filter(IndicatorTracking.month == filter_month)
-        
+
         trackings = query.all()
 
         tracked_count = len([t for t in trackings if t.status in ["COMPLETED", "CLOSED"]])
@@ -165,25 +197,35 @@ def get_global_dashboard(db: Session, year: int, month: int = None):
         user_plans = 0
         user_evidence = 0
 
+        evidence_from_trackings = 0
         for t in trackings:
             plans = db.query(ActionPlan).filter(
                 ActionPlan.tracking_id == t.id
             ).count()
             user_plans += plans
 
-            evidence = db.query(Evidence).filter(
+            evidence_from_trackings += db.query(Evidence).filter(
                 Evidence.tracking_id == t.id
             ).count()
-            user_evidence += evidence
 
             if t.month in monthly_stats:
                 monthly_stats[t.month]["total"] += 1
                 if t.is_closed:
                     monthly_stats[t.month]["closed"] += 1
                 monthly_stats[t.month]["plans"] += plans
-                monthly_stats[t.month]["evidence"] += evidence
+                monthly_stats[t.month]["evidence"] += 1
                 if t.weighted_score:
                     monthly_stats[t.month]["score"] += t.weighted_score
+
+        evidence_without_tracking = db.query(Evidence).filter(
+            Evidence.user_id == user.id,
+            Evidence.year == year
+        )
+        if filter_month:
+            evidence_without_tracking = evidence_without_tracking.filter(Evidence.month == filter_month)
+        evidence_without_tracking = evidence_without_tracking.filter(Evidence.tracking_id == None).count()
+
+        user_evidence = evidence_from_trackings + evidence_without_tracking
 
         total_action_plans += user_plans
         total_evidence += user_evidence
@@ -195,40 +237,92 @@ def get_global_dashboard(db: Session, year: int, month: int = None):
             leader_name = "Sin líder"
 
         user_score = 0
-        if trackings:
-            scores = [t.weighted_score for t in trackings if t.weighted_score]
-            if scores:
-                user_score = sum(scores) / len(scores)
+        if trackings and assignments:
+            indicator_groups = {}
+            for assignment in assignments:
+                indicator_name = assignment.indicator_name
+                if indicator_name not in indicator_groups:
+                    indicator_groups[indicator_name] = {
+                        "weight": assignment.weight or 0,
+                        "trackings": []
+                    }
+                trackings_ind = [t for t in trackings if t.assignment_id == assignment.id]
+                if filter_month:
+                    trackings_ind = [t for t in trackings_ind if t.month == filter_month]
+                indicator_groups[indicator_name]["trackings"].extend(trackings_ind)
+            
+            for ind_name, ind_data in indicator_groups.items():
+                trackings_with_data = [t for t in ind_data["trackings"] if t.achievement_percentage is not None]
+                if trackings_with_data:
+                    avg_achievement = sum(t.achievement_percentage for t in trackings_with_data) / len(trackings_with_data)
+                    weighted = (avg_achievement * ind_data["weight"]) / 100
+                    user_score += weighted
 
-        indicators_detail = []
+        indicators_by_name = {}
         for assignment in assignments:
             trackings_ind = [t for t in trackings if t.assignment_id == assignment.id]
-            
-            months_detail = []
-            for t in trackings_ind:
-                plans_count = db.query(ActionPlan).filter(ActionPlan.tracking_id == t.id).count()
-                evidence_count = db.query(Evidence).filter(Evidence.tracking_id == t.id).count()
-                
-                months_detail.append({
-                    "month": t.month,
-                    "is_closed": t.is_closed,
-                    "achieved_value": float(t.achieved_value) if t.achieved_value else None,
-                    "achieved_total": float(t.achieved_total) if t.achieved_total else None,
-                    "achievement_percentage": float(t.achievement_percentage) if t.achievement_percentage else None,
-                    "weighted_score": float(t.weighted_score) if t.weighted_score else None,
-                    "target_met": t.target_met,
-                    "plans_count": plans_count,
-                    "evidence_count": evidence_count,
-                    "has_action_plan": plans_count > 0,
-                    "has_evidence": evidence_count > 0,
-                })
 
-            indicators_detail.append({
-                "indicator_name": assignment.indicator_name,
-                "weight": assignment.weight,
-                "target_value": assignment.target_value,
-                "months": months_detail
-            })
+            if trackings_ind:
+                for t in trackings_ind:
+                    if filter_month and t.month != filter_month:
+                        continue
+
+                    plans_count = db.query(ActionPlan).filter(ActionPlan.tracking_id == t.id).count()
+                    evidence_count = db.query(Evidence).filter(
+                        (Evidence.tracking_id == t.id) |
+                        ((Evidence.tracking_id == None) & (Evidence.user_id == t.user_id) & (Evidence.year == t.year) & (Evidence.month == t.month))
+                    ).count()
+
+                    month_data = {
+                        "month": t.month,
+                        "is_closed": t.is_closed,
+                        "achieved_value": float(t.achieved_value) if t.achieved_value else None,
+                        "achieved_total": float(t.achieved_total) if t.achieved_total else None,
+                        "achievement_percentage": float(t.achievement_percentage) if t.achievement_percentage else None,
+                        "weighted_score": float(t.weighted_score) if t.weighted_score else None,
+                        "target_met": t.target_met,
+                        "plans_count": plans_count,
+                        "evidence_count": evidence_count,
+                        "has_action_plan": plans_count > 0,
+                        "has_evidence": evidence_count > 0,
+                    }
+
+                    if assignment.indicator_name not in indicators_by_name:
+                        indicators_by_name[assignment.indicator_name] = {
+                            "indicator_name": assignment.indicator_name,
+                            "weight": assignment.weight,
+                            "target_value": assignment.target_value,
+                            "months": []
+                        }
+                    indicators_by_name[assignment.indicator_name]["months"].append(month_data)
+            else:
+                if filter_month and assignment.month != filter_month:
+                    continue
+
+                month_data = {
+                    "month": assignment.month,
+                    "is_closed": False,
+                    "achieved_value": None,
+                    "achieved_total": None,
+                    "achievement_percentage": None,
+                    "weighted_score": None,
+                    "target_met": None,
+                    "plans_count": 0,
+                    "evidence_count": 0,
+                    "has_action_plan": False,
+                    "has_evidence": False,
+                }
+
+                if assignment.indicator_name not in indicators_by_name:
+                    indicators_by_name[assignment.indicator_name] = {
+                        "indicator_name": assignment.indicator_name,
+                        "weight": assignment.weight,
+                        "target_value": assignment.target_value,
+                        "months": []
+                    }
+                indicators_by_name[assignment.indicator_name]["months"].append(month_data)
+
+        indicators_detail = list(indicators_by_name.values())
 
         team_summary.append({
             "user_id": str(user.id),
@@ -252,11 +346,6 @@ def get_global_dashboard(db: Session, year: int, month: int = None):
 
     teams_data = {}
     for user in team_summary:
-        is_standalone_leader = user.get("is_leader", False) and not user.get("is_admin_role", False)
-        
-        if is_standalone_leader:
-            continue
-            
         leader = user["leader_name"]
         if leader not in teams_data:
             teams_data[leader] = {
@@ -281,23 +370,6 @@ def get_global_dashboard(db: Session, year: int, month: int = None):
         team["members"].sort(key=lambda x: x["score"], reverse=True)
 
     teams_list = sorted(teams_data.values(), key=lambda x: x["avg_score"], reverse=True)
-
-    users_without_leader = [
-        u for u in team_summary 
-        if (u["leader_name"] == "Sin líder" or not u["leader_name"]) 
-        and not u.get("is_leader", False)
-        and not u.get("is_leader_role", False)
-    ]
-    if users_without_leader:
-        teams_list.append({
-            "leader_name": "Sin líder",
-            "members": users_without_leader,
-            "total_indicators": sum(u["indicators_count"] for u in users_without_leader),
-            "total_closed": sum(u["closed_months"] for u in users_without_leader),
-            "total_plans": sum(u["action_plans"] for u in users_without_leader),
-            "total_evidence": sum(u["evidence_count"] for u in users_without_leader),
-            "avg_score": round(sum(u["score"] for u in users_without_leader) / len(users_without_leader), 2) if users_without_leader else 0
-        })
 
     monthly_summary = []
     for m in range(1, 13):

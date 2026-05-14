@@ -63,6 +63,9 @@ def list_users(db: Session):
             "position_name": u.position_name,
             "area": u.area,
             "subarea": u.subarea,
+            "direccion": u.direccion,
+            "linea": u.linea,
+            "numero_linea": u.numero_linea,
             "hire_date": u.hire_date,
             "contract_type": u.contract_type,
             "salary_type": u.salary_type,
@@ -97,6 +100,9 @@ def get_user_with_roles(db: Session, user_id: UUID):
         "position_name": user.position_name,
         "area": user.area,
         "subarea": user.subarea,
+        "direccion": user.direccion,
+        "linea": user.linea,
+        "numero_linea": user.numero_linea,
         "hire_date": user.hire_date,
         "contract_type": user.contract_type,
         "salary_type": user.salary_type,
@@ -113,12 +119,11 @@ def get_user_with_roles(db: Session, user_id: UUID):
 
 
 def create_user(db: Session, data):
-    # Validaremail único
+
     existing_email = db.query(User).filter(User.email == data.email).first()
     if existing_email:
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    # Validar documento único
     existing_doc = (
         db.query(User).filter(User.document_number == data.document_number).first()
     )
@@ -134,6 +139,9 @@ def create_user(db: Session, data):
         position_name=data.position_name,
         area=data.area,
         subarea=data.subarea,
+        direccion=data.direccion,
+        linea=data.linea,
+        numero_linea=data.numero_linea,
     )
 
     db.add(user)
@@ -148,12 +156,16 @@ def create_user(db: Session, data):
         "position_name": user.position_name,
         "area": user.area,
         "subarea": user.subarea,
+        "direccion": user.direccion,
+        "linea": user.linea,
+        "numero_linea": user.numero_linea,
         "hire_date": user.hire_date,
         "contract_type": user.contract_type,
         "salary_type": user.salary_type,
         "leader_id": user.leader_id,
+        "leader_name": user.leader.name if user.leader else None,
         "is_active": user.is_active,
-        "roles": [],
+        "roles": user.roles_flat,
     }
 
 
@@ -233,10 +245,6 @@ def update_user(db: Session, user_id: UUID, data: dict):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    old_position = user.position_name
-    old_area = user.area
-    old_subarea = user.subarea
-
     if "name" in data and data["name"]:
         user.name = data["name"]
     if "email" in data and data["email"]:
@@ -247,6 +255,9 @@ def update_user(db: Session, user_id: UUID, data: dict):
     new_position = data.get("position_name")
     new_area = data.get("area")
     new_subarea = data.get("subarea")
+    new_direccion = data.get("direccion")
+    new_linea = data.get("linea")
+    new_numero_linea = data.get("numero_linea")
 
     if new_position is not None:
         user.position_name = new_position
@@ -254,57 +265,12 @@ def update_user(db: Session, user_id: UUID, data: dict):
         user.area = new_area
     if new_subarea is not None:
         user.subarea = new_subarea
-
-    position_changed = "position_name" in data
-    area_changed = "area" in data
-    subarea_changed = "subarea" in data
-
-    if position_changed or area_changed:
-        current_month = datetime.now().month
-        current_year = datetime.now().year
-
-        active_assignments = (
-            db.query(IndicatorAssignment)
-            .filter(
-                IndicatorAssignment.user_id == user_id,
-                IndicatorAssignment.year == current_year,
-                IndicatorAssignment.is_active == True,
-            )
-            .all()
-        )
-
-        from_month = current_month + 1
-
-        for assignment in active_assignments:
-            if assignment.end_month >= current_month:
-                assignment.end_month = current_month - 1
-                if assignment.end_month < assignment.start_month:
-                    assignment.end_month = assignment.start_month
-                    assignment.is_active = False
-
-                trackings_futuros = (
-                    db.query(IndicatorTracking)
-                    .filter(
-                        IndicatorTracking.assignment_id == assignment.id,
-                        IndicatorTracking.month >= from_month,
-                    )
-                    .all()
-                )
-
-                for tracking in trackings_futuros:
-                    from app.models.evidence import Evidence
-
-                    db.query(Evidence).filter(
-                        Evidence.tracking_id == tracking.id
-                    ).update(
-                        {
-                            Evidence.tracking_id: None,
-                            Evidence.user_id: user_id,
-                            Evidence.year: tracking.year,
-                            Evidence.month: tracking.month,
-                        }
-                    )
-                    db.delete(tracking)
+    if new_direccion is not None:
+        user.direccion = new_direccion
+    if new_linea is not None:
+        user.linea = new_linea
+    if new_numero_linea is not None:
+        user.numero_linea = new_numero_linea
 
     db.commit()
     db.refresh(user)

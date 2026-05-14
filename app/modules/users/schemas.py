@@ -22,12 +22,16 @@ class UserResponse(BaseModel):
     position_name: Optional[str] = None
     area: Optional[str] = None
     subarea: Optional[str] = None
+    direccion: Optional[str] = None
+    linea: Optional[str] = None
+    numero_linea: Optional[str] = None
 
     hire_date: Optional[date] = None
     contract_type: Optional[str] = None
     salary_type: Optional[str] = None
 
     leader_id: Optional[UUID] = None
+    leader_name: Optional[str] = None
     is_active: bool = True
     roles: List[RoleOut] = Field(default_factory=list)
 
@@ -55,6 +59,9 @@ class UpdateUserRequest(BaseModel):
     position_name: Optional[str] = None
     area: Optional[str] = None
     subarea: Optional[str] = None
+    direccion: Optional[str] = None
+    linea: Optional[str] = None
+    numero_linea: Optional[str] = None
 
 
 class CreateUserRequest(BaseModel):
@@ -64,6 +71,9 @@ class CreateUserRequest(BaseModel):
     position_name: Optional[str] = None
     area: Optional[str] = None
     subarea: Optional[str] = None
+    direccion: Optional[str] = None
+    linea: Optional[str] = None
+    numero_linea: Optional[str] = None
 
 
 class ImportExcelResponse(BaseModel):

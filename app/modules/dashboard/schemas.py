@@ -37,4 +37,5 @@ class UserDashboard(BaseModel):
 class TeamDashboardResponse(BaseModel):
     leader_id: UUID
     year: int
+    month: int | None = None
     team: list[UserDashboard]

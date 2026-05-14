@@ -105,3 +105,21 @@ def close_tracking(
     current_user: CurrentUser
 ):
     return service.close_tracking(db, tracking_id, data.achieved_value, data.achieved_total)
+
+
+# ------------------------------------------------
+# CLOSE ASSIGNMENT DIRECTLY (NEW MODEL)
+# ------------------------------------------------
+
+@router.patch(
+    "/assignment/{assignment_id}/close",
+    response_model=IndicatorTrackingResponse,
+    dependencies=[Depends(require_roles("LEADER", "ADMIN"))]
+)
+def close_assignment_directly(
+    assignment_id: UUID,
+    data: TrackingCloseRequest,
+    db: DBSession,
+    current_user: CurrentUser
+):
+    return service.close_assignment_direct(db, assignment_id, data.achieved_value, data.achieved_total, current_user.id)

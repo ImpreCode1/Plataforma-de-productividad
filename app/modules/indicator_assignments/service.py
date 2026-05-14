@@ -2,19 +2,52 @@ from sqlalchemy.orm import Session
 from uuid import UUID
 from fastapi import HTTPException
 import pandas as pd
+import re
+import unicodedata
 
 from app.models.indicator_assignment import IndicatorAssignment
 from app.models.tracking import IndicatorTracking
 from app.models.user import User
 
 
+def normalize_name(name):
+    if not name:
+        return name
+    name = str(name)
+    name = unicodedata.normalize('NFD', name)
+    name = ''.join(c for c in name if not unicodedata.combining(c))
+    return re.sub(r"\s+", " ", name.strip()).lower()
+
+
+def names_match(name1, name2, threshold=0.6):
+    if not name1 or not name2:
+        return False
+    words1 = set(normalize_name(name1).lower().split())
+    words2 = set(normalize_name(name2).lower().split())
+    if not words1 or not words2:
+        return False
+    intersection = words1 & words2
+    min_words = min(len(words1), len(words2))
+    if min_words == 0:
+        return False
+    return len(intersection) / min_words >= threshold
+
+
+def find_user_by_fuzzy_name(users_dict, target_name):
+    if not target_name:
+        return None
+    target = normalize_name(target_name).lower()
+    for key, user in users_dict.items():
+        if isinstance(key, str) and names_match(key.lower(), target):
+            return user
+    return None
+
+
 # ------------------------------------------------
-# CREATE + GENERATE MONTHS 🔥
+# CREATE
 # ------------------------------------------------
 
 def create_assignment(db: Session, data):
-    from datetime import datetime
-
     user = db.query(User).filter(User.id == data.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -22,50 +55,32 @@ def create_assignment(db: Session, data):
     existing = db.query(IndicatorAssignment).filter(
         IndicatorAssignment.user_id == data.user_id,
         IndicatorAssignment.year == data.year,
+        IndicatorAssignment.month == data.month,
         IndicatorAssignment.indicator_name == data.indicator_name
     ).first()
 
     if existing:
-        raise HTTPException(status_code=400, detail="Indicator already exists for this user/year")
-
-    current_month = datetime.now().month if data.year == datetime.now().year else 1
-    start_month = data.start_month if data.start_month is not None else current_month
-    end_month = data.end_month if data.end_month is not None else 12
-    if start_month > end_month:
-        raise HTTPException(status_code=400, detail="start_month must be <= end_month")
+        raise HTTPException(status_code=400, detail="Indicator already exists for this user/year/month")
 
     assignment = IndicatorAssignment(
         user_id=data.user_id,
         indicator_name=data.indicator_name,
         formula=data.formula,
         year=data.year,
+        month=data.month,
         target_value=data.target_value,
         weight=data.weight,
         frequency=data.frequency,
-        start_month=start_month,
-        end_month=end_month,
         position_name_at_assignment=user.position_name,
         area_at_assignment=user.area,
-        subarea_at_assignment=user.subarea
+        subarea_at_assignment=user.subarea,
+        direccion_at_assignment=user.direccion,
+        linea_at_assignment=user.linea,
+        numero_linea_at_assignment=user.numero_linea
     )
 
     db.add(assignment)
-    db.flush()
-
-    trackings = []
-
-    for month in range(start_month, end_month + 1):
-        tracking = IndicatorTracking(
-            user_id=data.user_id,
-            assignment_id=assignment.id,
-            year=data.year,
-            month=month,
-            status="PENDING",
-            is_closed=False
-        )
-        trackings.append(tracking)
-
-    db.add_all(trackings)
+    db.commit()
 
     db.commit()
     db.refresh(assignment)
@@ -77,21 +92,26 @@ def create_assignment(db: Session, data):
 # LIST
 # ------------------------------------------------
 
-def list_assignments(db: Session, user_id: UUID, year: int):
-    return db.query(IndicatorAssignment).filter(
+def list_assignments(db: Session, user_id: UUID, year: int, month: int = None):
+    query = db.query(IndicatorAssignment).filter(
         IndicatorAssignment.user_id == user_id,
         IndicatorAssignment.year == year
-    ).all()
+    )
+    if month:
+        query = query.filter(IndicatorAssignment.month == month)
+    return query.all()
 
 
 # ------------------------------------------------
 # LIST ALL
 # ------------------------------------------------
 
-def list_all_assignments(db: Session, year: int | None = None):
+def list_all_assignments(db: Session, year: int | None = None, month: int | None = None):
     query = db.query(IndicatorAssignment)
     if year:
         query = query.filter(IndicatorAssignment.year == year)
+    if month:
+        query = query.filter(IndicatorAssignment.month == month)
     return query.all()
 
 
@@ -107,29 +127,9 @@ def update_assignment(db: Session, assignment_id: UUID, data):
     if not assignment:
         raise HTTPException(status_code=404, detail="Assignment not found")
 
-    old_end_month = assignment.end_month
-
     for field, value in data.model_dump(exclude_unset=True).items():
         if value is not None:
             setattr(assignment, field, value)
-
-    if data.end_month and data.end_month > old_end_month:
-        existing_months = db.query(IndicatorTracking).filter(
-            IndicatorTracking.assignment_id == assignment_id
-        ).all()
-        existing_months_set = {t.month for t in existing_months}
-
-        for month in range(old_end_month + 1, data.end_month + 1):
-            if month not in existing_months_set:
-                tracking = IndicatorTracking(
-                    user_id=assignment.user_id,
-                    assignment_id=assignment.id,
-                    year=assignment.year,
-                    month=month,
-                    status="PENDING",
-                    is_closed=False
-                )
-                db.add(tracking)
 
     db.commit()
     db.refresh(assignment)
@@ -171,10 +171,10 @@ def delete_assignment(db: Session, assignment_id: UUID):
 
 
 # ------------------------------------------------
-# CLOSE ASSIGNMENT (for position changes)
+# CLOSE ASSIGNMENT
 # ------------------------------------------------
 
-def close_assignment(db: Session, assignment_id: UUID, close_month: int):
+def close_assignment(db: Session, assignment_id: UUID):
     assignment = db.query(IndicatorAssignment).filter(
         IndicatorAssignment.id == assignment_id
     ).first()
@@ -182,18 +182,7 @@ def close_assignment(db: Session, assignment_id: UUID, close_month: int):
     if not assignment:
         raise HTTPException(status_code=404, detail="Assignment not found")
 
-    if close_month < assignment.start_month or close_month > assignment.end_month:
-        raise HTTPException(status_code=400, detail="close_month must be between start_month and end_month")
-
-    assignment.end_month = close_month
-
-    trackings = db.query(IndicatorTracking).filter(
-        IndicatorTracking.assignment_id == assignment_id,
-        IndicatorTracking.month > close_month
-    ).all()
-
-    for tracking in trackings:
-        db.delete(tracking)
+    assignment.is_active = False
 
     db.commit()
     db.refresh(assignment)
@@ -204,7 +193,7 @@ def close_assignment(db: Session, assignment_id: UUID, close_month: int):
 # REOPEN ASSIGNMENT (create new with updated position)
 # ------------------------------------------------
 
-def reopen_assignment(db: Session, assignment_id: UUID, new_start_month: int, new_indicators: dict):
+def reopen_assignment(db: Session, assignment_id: UUID, month: int, new_indicators: dict):
     original = db.query(IndicatorAssignment).filter(
         IndicatorAssignment.id == assignment_id
     ).first()
@@ -222,8 +211,8 @@ def reopen_assignment(db: Session, assignment_id: UUID, new_start_month: int, ne
         existing = db.query(IndicatorAssignment).filter(
             IndicatorAssignment.user_id == original.user_id,
             IndicatorAssignment.year == original.year,
-            IndicatorAssignment.indicator_name == indicator_name,
-            IndicatorAssignment.start_month == new_start_month
+            IndicatorAssignment.month == month,
+            IndicatorAssignment.indicator_name == indicator_name
         ).first()
 
         if existing:
@@ -234,31 +223,16 @@ def reopen_assignment(db: Session, assignment_id: UUID, new_start_month: int, ne
             indicator_name=indicator_name,
             formula=values.get("formula"),
             year=original.year,
+            month=month,
             target_value=values["target_value"],
             weight=values["weight"],
             frequency=values.get("frequency", "MONTHLY"),
-            start_month=new_start_month,
-            end_month=12,
             position_name_at_assignment=user.position_name,
             area_at_assignment=user.area,
             subarea_at_assignment=user.subarea
         )
         db.add(assignment)
-        created_assignments.append((assignment, new_start_month))
-
-    db.flush()
-
-    for assignment, start_m in created_assignments:
-        for month in range(start_m, 13):
-            tracking = IndicatorTracking(
-                user_id=assignment.user_id,
-                assignment_id=assignment.id,
-                year=assignment.year,
-                month=month,
-                status="PENDING",
-                is_closed=False
-            )
-            db.add(tracking)
+        created_assignments.append((assignment, month))
 
     db.commit()
     return created_assignments
@@ -268,84 +242,201 @@ def reopen_assignment(db: Session, assignment_id: UUID, new_start_month: int, ne
 # IMPORT EXCEL 🔥
 # ------------------------------------------------
 
-def import_assignments_from_excel(db: Session, file, year: int):
-    from datetime import datetime
+MONTHS_MAP = {
+    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4,
+    "mayo": 5, "junio": 6, "julio": 7, "agosto": 8,
+    "septiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12
+}
 
+def safe_float(value, default=0):
+    if value is None or pd.isna(value):
+        return default
+    try:
+        str_value = str(value).strip()
+        if str_value.endswith('%'):
+            str_value = str_value[:-1].replace(',', '.')
+            return float(str_value)
+        float_val = float(value)
+        if 0 < float_val <= 1:
+            return round(float_val * 100, 2)
+        return round(float_val, 2)
+    except:
+        return default
+
+
+def import_assignments_from_excel(db: Session, file, year: int, month: int = None):
     df = pd.read_excel(file)
 
     created = 0
     updated = 0
-    assignments_dict = {}
+    failed = []
 
-    users_by_email = {}
+    users_by_name = {}
     all_users = db.query(User).all()
     for user in all_users:
-        users_by_email[user.email.lower()] = user
+        normalized = normalize_name(user.name)
+        users_by_name[normalized] = user
 
     for _, row in df.iterrows():
-        responsible_email = str(row["Responsable"]).lower().strip()
-        user = users_by_email.get(responsible_email)
-        
+        responsible_name = str(row["Responsable"]).strip()
+        normalized_name = normalize_name(responsible_name)
+        user = users_by_name.get(normalized_name)
+
         if not user:
+            user = find_user_by_fuzzy_name(users_by_name, responsible_name)
+
+        if not user:
+            indicator_name = str(row.get("Nombre del Indicador", "")).strip()
+            failed.append({
+                "responsable": responsible_name,
+                "indicador": indicator_name
+            })
             continue
+
+        if pd.notna(row.get("Vicepresidencia")):
+            user.area = str(row["Vicepresidencia"]).strip()
+        if pd.notna(row.get("Área")):
+            user.subarea = str(row["Área"]).strip()
+        if pd.notna(row.get("Dirección")):
+            user.direccion = str(row["Dirección"]).strip()
+        if pd.notna(row.get("Linea")):
+            user.linea = str(row["Linea"]).strip()
+        if pd.notna(row.get("# Linea")):
+            user.numero_linea = str(row["# Linea"]).strip()
+        if pd.notna(row.get("Cargo")):
+            user.position_name = str(row["Cargo"]).strip()
 
         indicator_name = str(row["Nombre del Indicador"]).strip()
         
+        if month is None:
+            for month_name, month_num in MONTHS_MAP.items():
+                if pd.notna(row.get(month_name)):
+                    month = month_num
+                    break
+            if month is None:
+                month = 1
+
         existing = db.query(IndicatorAssignment).filter(
             IndicatorAssignment.user_id == user.id,
             IndicatorAssignment.year == year,
+            IndicatorAssignment.month == month,
             IndicatorAssignment.indicator_name == indicator_name
         ).first()
 
         if existing:
-            existing.target_value = float(row.get("Meta", 0))
-            existing.weight = float(row.get("Peso", 0))
+            existing.target_value = safe_float(row.get("Meta"))
+            existing.weight = safe_float(row.get("Peso"))
             existing.formula = str(row.get("Formula del Indicador", "")) if pd.notna(row.get("Formula del Indicador")) else None
             existing.frequency = str(row.get("Frecuencia", "MONTHLY")) if pd.notna(row.get("Frecuencia")) else "MONTHLY"
+            existing.year = year
+            existing.month = month
+            existing.position_name_at_assignment = str(row.get("Cargo", "")).strip() if pd.notna(row.get("Cargo")) else user.position_name
+            existing.area_at_assignment = str(row.get("Vicepresidencia", "")).strip() if pd.notna(row.get("Vicepresidencia")) else user.area
+            existing.subarea_at_assignment = str(row.get("Área", "")).strip() if pd.notna(row.get("Área")) else user.subarea
+            existing.direccion_at_assignment = str(row.get("Dirección", "")).strip() if pd.notna(row.get("Dirección")) else user.direccion
+            existing.linea_at_assignment = str(row.get("Linea", "")).strip() if pd.notna(row.get("Linea")) else user.linea
+            existing.numero_linea_at_assignment = str(row.get("# Linea", "")).strip() if pd.notna(row.get("# Linea")) else user.numero_linea
             updated += 1
         else:
-            start_month = int(row.get("Mes Inicio", 1)) if pd.notna(row.get("Mes Inicio")) else 1
-            end_month = int(row.get("Mes Fin", 12)) if pd.notna(row.get("Mes Fin")) else 12
-            
-            if start_month > end_month:
-                start_month = 1
-                end_month = 12
-
             assignment = IndicatorAssignment(
                 user_id=user.id,
                 indicator_name=indicator_name,
                 formula=str(row.get("Formula del Indicador", "")) if pd.notna(row.get("Formula del Indicador")) else None,
                 year=year,
-                target_value=float(row.get("Meta", 0)),
-                weight=float(row.get("Peso", 0)),
+                month=month,
+                target_value=safe_float(row.get("Meta")),
+                weight=safe_float(row.get("Peso")),
                 frequency=str(row.get("Frecuencia", "MONTHLY")) if pd.notna(row.get("Frecuencia")) else "MONTHLY",
-                start_month=start_month,
-                end_month=end_month,
-                position_name_at_assignment=user.position_name,
-                area_at_assignment=user.area,
-                subarea_at_assignment=user.subarea
+                position_name_at_assignment=str(row.get("Cargo", "")).strip() if pd.notna(row.get("Cargo")) else user.position_name,
+                area_at_assignment=str(row.get("Vicepresidencia", "")).strip() if pd.notna(row.get("Vicepresidencia")) else user.area,
+                subarea_at_assignment=str(row.get("Área", "")).strip() if pd.notna(row.get("Área")) else user.subarea,
+                direccion_at_assignment=str(row.get("Dirección", "")).strip() if pd.notna(row.get("Dirección")) else user.direccion,
+                linea_at_assignment=str(row.get("Linea", "")).strip() if pd.notna(row.get("Linea")) else user.linea,
+                numero_linea_at_assignment=str(row.get("# Linea", "")).strip() if pd.notna(row.get("# Linea")) else user.numero_linea
             )
             db.add(assignment)
-            assignments_dict[(user.id, indicator_name)] = assignment
             created += 1
-
-    db.flush()
-
-    for (user_id, indicator_name), assignment in assignments_dict.items():
-        for month in range(assignment.start_month, assignment.end_month + 1):
-            tracking = IndicatorTracking(
-                user_id=user_id,
-                assignment_id=assignment.id,
-                year=year,
-                month=month,
-                status="PENDING",
-                is_closed=False
-            )
-            db.add(tracking)
 
     db.commit()
 
     return {
         "created": created,
-        "updated": updated
+        "updated": updated,
+        "failed": failed
+    }
+
+
+# ------------------------------------------------
+# CLONE FROM PREVIOUS MONTH
+# ------------------------------------------------
+
+def clone_from_previous_month(db: Session, year: int, month: int):
+    if month == 1:
+        prev_year = year - 1
+        prev_month = 12
+    else:
+        prev_year = year
+        prev_month = month - 1
+
+    prev_assignments = db.query(IndicatorAssignment).filter(
+        IndicatorAssignment.year == prev_year,
+        IndicatorAssignment.month == prev_month
+    ).all()
+
+    if not prev_assignments:
+        return {"created": 0, "message": "No assignments found for previous month"}
+
+    created = 0
+    updated = 0
+
+    for prev in prev_assignments:
+        user = db.query(User).filter(User.id == prev.user_id).first()
+        if not user:
+            continue
+
+        existing = db.query(IndicatorAssignment).filter(
+            IndicatorAssignment.user_id == prev.user_id,
+            IndicatorAssignment.year == year,
+            IndicatorAssignment.month == month,
+            IndicatorAssignment.indicator_name == prev.indicator_name
+        ).first()
+
+        if existing:
+            existing.target_value = prev.target_value
+            existing.weight = prev.weight
+            existing.formula = prev.formula
+            existing.frequency = prev.frequency
+            existing.position_name_at_assignment = user.position_name
+            existing.area_at_assignment = user.area
+            existing.subarea_at_assignment = user.subarea
+            existing.direccion_at_assignment = user.direccion
+            existing.linea_at_assignment = user.linea
+            existing.numero_linea_at_assignment = user.numero_linea
+            updated += 1
+        else:
+            assignment = IndicatorAssignment(
+                user_id=prev.user_id,
+                indicator_name=prev.indicator_name,
+                formula=prev.formula,
+                year=year,
+                month=month,
+                target_value=prev.target_value,
+                weight=prev.weight,
+                frequency=prev.frequency,
+                position_name_at_assignment=user.position_name,
+                area_at_assignment=user.area,
+                subarea_at_assignment=user.subarea,
+                direccion_at_assignment=user.direccion,
+                linea_at_assignment=user.linea,
+                numero_linea_at_assignment=user.numero_linea
+            )
+            db.add(assignment)
+            created += 1
+
+    db.commit()
+
+    return {
+        "created": created,
+        "updated": updated,
+        "message": f"Cloned assignments from {prev_month}/{prev_year} to {month}/{year}"
     }
