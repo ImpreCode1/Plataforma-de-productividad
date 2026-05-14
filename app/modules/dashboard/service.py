@@ -171,10 +171,11 @@ def get_global_dashboard(db: Session, year: int, month: int = None):
 
         if filter_month:
             assignments = [a for a in all_assignments if a.month == filter_month]
-            user_indicators = len(assignments)
         else:
             assignments = all_assignments
-            user_indicators = len(all_assignments)
+        
+        unique_indicators = set(a.indicator_name for a in assignments if a.indicator_name)
+        user_indicators = len(unique_indicators)
 
         total_indicators += user_indicators
 
@@ -236,10 +237,26 @@ def get_global_dashboard(db: Session, year: int, month: int = None):
             leader_name = "Sin líder"
 
         user_score = 0
-        if trackings:
-            scores = [t.weighted_score for t in trackings if t.weighted_score]
-            if scores:
-                user_score = sum(scores) / len(scores)
+        if trackings and assignments:
+            indicator_groups = {}
+            for assignment in assignments:
+                indicator_name = assignment.indicator_name
+                if indicator_name not in indicator_groups:
+                    indicator_groups[indicator_name] = {
+                        "weight": assignment.weight or 0,
+                        "trackings": []
+                    }
+                trackings_ind = [t for t in trackings if t.assignment_id == assignment.id]
+                if filter_month:
+                    trackings_ind = [t for t in trackings_ind if t.month == filter_month]
+                indicator_groups[indicator_name]["trackings"].extend(trackings_ind)
+            
+            for ind_name, ind_data in indicator_groups.items():
+                trackings_with_data = [t for t in ind_data["trackings"] if t.achievement_percentage is not None]
+                if trackings_with_data:
+                    avg_achievement = sum(t.achievement_percentage for t in trackings_with_data) / len(trackings_with_data)
+                    weighted = (avg_achievement * ind_data["weight"]) / 100
+                    user_score += weighted
 
         indicators_by_name = {}
         for assignment in assignments:
