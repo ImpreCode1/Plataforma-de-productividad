@@ -33,4 +33,3 @@ class Settings:
     SMTP_FROM_NAME: str = os.getenv("MAIL_FROM_NAME", "Plataforma de Productividad")
 
 settings = Settings()
-print(f"SMTP Password loaded: '{settings.SMTP_PASSWORD}' (length: {len(settings.SMTP_PASSWORD)})")

@@ -227,40 +227,32 @@ def send_notifications(db: Session, recipient_type: str, recipient_ids: List[str
     sent_count = 0
     failed_count = 0
     
-    print(f"Configuración SMTP - Host: {settings.SMTP_HOST}, Port: {settings.SMTP_PORT}")
-    print(f"SMTP User: {settings.SMTP_USER}")
-    print(f"SMTP Password repr: {repr(settings.SMTP_PASSWORD)}")
-    
     try:
         server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT)
         server.ehlo()
         server.starttls()
         server.ehlo()
         server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-        print("✓ Conexión SMTP establecida")
         
         for user in users:
             try:
                 subject, body = get_email_content(template, user.name or "Usuario", month, year)
-                print(f"Enviando a {user.email}: {subject}")
                 
+                from_address = settings.SMTP_FROM if settings.SMTP_FROM else settings.SMTP_USER
                 msg = MIMEMultipart()
-                msg['From'] = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_USER}>"
+                msg['From'] = f"{settings.SMTP_FROM_NAME} <{from_address}>"
                 msg['To'] = user.email
                 msg['Subject'] = subject
                 msg.attach(MIMEText(body, 'html'))
                 
-                server.sendmail(settings.SMTP_USER, user.email, msg.as_string())
+                server.sendmail(from_address, user.email, msg.as_string())
                 sent_count += 1
-                print(f"✓ Enviado a {user.email}")
             except Exception as e:
-                print(f"✗ Error sending to {user.email}: {str(e)}")
                 failed_count += 1
         
         server.quit()
         
     except Exception as e:
-        print(f"Error initializing email client: {e}")
         error_msg = str(e)
         if "Authentication unsuccessful" in error_msg:
             return {
