@@ -20,6 +20,21 @@ router = APIRouter(
 
 
 # ------------------------------------------------
+# Get unique areas (Vicepresidencias)
+# ------------------------------------------------
+
+@router.get(
+    "/areas",
+    response_model=list[str]
+)
+def get_areas(
+    db: DBSession,
+    current_user: CurrentUser
+):
+    return service.get_unique_areas(db)
+
+
+# ------------------------------------------------
 # List users
 # ------------------------------------------------
 

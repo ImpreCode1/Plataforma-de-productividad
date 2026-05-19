@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from uuid import UUID
 
 from app.models.user import User
@@ -131,11 +132,21 @@ def get_team_dashboard(db: Session, leader_id: UUID, year: int, month: int = Non
 # GLOBAL DASHBOARD (ADMIN) - All users overview
 # ------------------------------------------------
 
-def get_global_dashboard(db: Session, year: int, month: int = None):
+def get_global_dashboard(db: Session, year: int, month: int = None, area: str = None):
 
-    all_users = db.query(User).filter(
-        User.is_active == True
-    ).all()
+    from app.modules.users.service import normalize_area
+
+    all_users_query = db.query(User).filter(User.is_active == True)
+
+    all_users = all_users_query.all()
+
+    if area:
+        normalized_area = normalize_area(area)
+        if normalized_area:
+            all_users = [
+                u for u in all_users
+                if normalize_area(u.area) == normalized_area
+            ]
 
     filter_month = month
 
