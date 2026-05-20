@@ -405,3 +405,134 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
         "monthly_summary": monthly_summary,
         "teams": teams_list
     }
+
+
+def generate_global_report(db: Session, year: int, area: str = None):
+    from app.modules.users.service import normalize_area
+    from io import BytesIO
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+
+    all_users = db.query(User).filter(User.is_active == True).all()
+
+    if area:
+        normalized_area = normalize_area(area)
+        if normalized_area:
+            all_users = [
+                u for u in all_users
+                if normalize_area(u.area) == normalized_area
+            ]
+
+    months_names = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+                    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+
+    headers = [
+        "Vicepresidencia", "Área", "Dirección", "Linea", "# Linea", "Cargo",
+        "Responsable", "Nombre del Indicador", "Meta", "Peso", "Frecuencia"
+    ]
+    for m in months_names:
+        headers.append(m)
+        headers.append(f"Logro {m}")
+    headers.append("Observaciones")
+    headers.append("Correo Corporativo")
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"Reporte {year}"
+
+    hfont = Font(bold=True, color="FFFFFF", size=10)
+    hfill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    bdr = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin')
+    )
+
+    for ci, h in enumerate(headers, 1):
+        c = ws.cell(row=1, column=ci, value=h)
+        c.font = hfont
+        c.fill = hfill
+        c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        c.border = bdr
+
+    rn = 2
+
+    for user in all_users:
+        assignments = db.query(IndicatorAssignment).filter(
+            IndicatorAssignment.user_id == user.id,
+            IndicatorAssignment.year == year,
+            IndicatorAssignment.is_active == True
+        ).all()
+
+        if not assignments:
+            continue
+
+        indicator_names = list(set(a.indicator_name for a in assignments if a.indicator_name))
+
+        for ind_name in indicator_names:
+            ind_assignments = [a for a in assignments if a.indicator_name == ind_name]
+            first_assignment = ind_assignments[0]
+
+            ind_ids = [a.id for a in ind_assignments]
+            trackings = db.query(IndicatorTracking).filter(
+                IndicatorTracking.assignment_id.in_(ind_ids)
+            ).all()
+            trackings_by_month = {t.month: t for t in trackings}
+
+            row_vals = [
+                user.area or "",
+                user.subarea or "",
+                user.direccion or "",
+                user.linea or "",
+                user.numero_linea or "",
+                user.position_name or "",
+                user.name,
+                ind_name,
+                float(first_assignment.target_value) if first_assignment.target_value else "",
+                float(first_assignment.weight) if first_assignment.weight else "",
+                first_assignment.frequency or "MONTHLY",
+            ]
+
+            for m in range(1, 13):
+                month_assignment = next((a for a in ind_assignments if a.month == m), None)
+
+                if not month_assignment:
+                    row_vals.append("")
+                    row_vals.append("X")
+                    continue
+
+                meta = float(month_assignment.target_value) if month_assignment and month_assignment.target_value else None
+                peso = float(first_assignment.weight) if first_assignment.weight else None
+
+                tracking = trackings_by_month.get(m)
+                calificacion = float(tracking.achievement_percentage) if tracking and tracking.achievement_percentage is not None else None
+
+                row_vals.append(calificacion if calificacion is not None else "")
+
+                if calificacion is None:
+                    row_vals.append("")
+                    continue
+
+                row_vals.append(peso if meta is not None and calificacion >= meta else 0)
+
+            row_vals.append("")
+            row_vals.append(user.email or "")
+
+            for ci, val in enumerate(row_vals, 1):
+                c = ws.cell(row=rn, column=ci, value=val)
+                c.border = bdr
+                c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+            rn += 1
+
+    for col_cells in ws.columns:
+        max_len = 0
+        col_letter = col_cells[0].column_letter
+        for cell in col_cells:
+            if cell.value:
+                max_len = max(max_len, len(str(cell.value)))
+        ws.column_dimensions[col_letter].width = min(max_len + 3, 30)
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return output
