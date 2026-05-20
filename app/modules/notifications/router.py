@@ -48,7 +48,8 @@ def get_users(
             id=str(user.id),
             name=user.name or user.email,
             email=user.email,
-            role=", ".join(role_names) if role_names else "Sin rol"
+            role=", ".join(role_names) if role_names else "Sin rol",
+            area=user.area
         ))
     
     return {"users": result}
@@ -66,6 +67,7 @@ def send_notifications(
         db=db,
         recipient_type=request.recipient_type,
         recipient_ids=request.recipient_ids or [],
+        filter_area=request.filter_area,
         template=request.template,
         month=request.month,
         year=request.year,

@@ -8,11 +8,13 @@ class UserInfo(BaseModel):
     name: str
     email: str
     role: str
+    area: str = None
 
 
 class NotificationSendRequest(BaseModel):
     recipient_type: str  # "all_leaders", "all_employees", "specific"
     recipient_ids: Optional[List[str]] = None
+    filter_area: Optional[str] = None
     template: str  # "evidence_reminder", "calification_reminder"
     month: int
     year: int

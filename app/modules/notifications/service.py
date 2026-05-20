@@ -209,14 +209,19 @@ def get_email_content(template: str, name: str, month: int, year: int) -> tuple:
         return subject, html_body
 
 
-def send_notifications(db: Session, recipient_type: str, recipient_ids: List[str], template: str, month: int, year: int, sent_by: str) -> dict:
+def send_notifications(db: Session, recipient_type: str, recipient_ids: List[str], filter_area: str = None, template: str = None, month: int = None, year: int = None, sent_by: str = None) -> dict:
     """Send email notifications to selected users"""
-    
+
     if recipient_type == "specific":
         users = get_specific_users(db, recipient_ids)
     else:
         users = get_users_by_type(db, recipient_type)
-    
+
+    if filter_area:
+        from app.modules.users.service import normalize_area
+        normalized_filter = normalize_area(filter_area)
+        users = [u for u in users if normalize_area(u.area) == normalized_filter]
+
     if not users:
         return {
             "sent_count": 0,
