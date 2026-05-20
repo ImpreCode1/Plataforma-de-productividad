@@ -185,8 +185,7 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
         else:
             assignments = all_assignments
         
-        unique_indicators = set(a.indicator_name for a in assignments if a.indicator_name)
-        user_indicators = len(unique_indicators)
+        user_indicators = len(assignments)
 
         total_indicators += user_indicators
 
