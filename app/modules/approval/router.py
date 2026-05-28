@@ -27,6 +27,18 @@ def submit_tracking(
     return service.submit_tracking(db, tracking_id, current_user)
 
 
+@router.post(
+    "/assignment/{assignment_id}/submit",
+    response_model=TrackingApprovalResponse,
+)
+def submit_assignment(
+    assignment_id: UUID,
+    db: DBSession,
+    current_user: CurrentUser,
+):
+    return service.submit_assignment(db, assignment_id, current_user)
+
+
 @router.patch(
     "/{tracking_id}/approve",
     response_model=TrackingApprovalResponse,

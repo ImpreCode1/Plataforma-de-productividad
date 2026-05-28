@@ -41,6 +41,20 @@ def create_assignment(
 # ------------------------------------------------
 
 @router.get(
+    "/me",
+    response_model=IndicatorAssignmentListResponse
+)
+def list_my_assignments(
+    db: DBSession,
+    current_user: CurrentUser,
+    year: int | None = None,
+    month: int | None = None,
+):
+    assignments = service.list_assignments(db, current_user.id, year, month)
+    return {"assignments": assignments}
+
+
+@router.get(
     "/",
     response_model=IndicatorAssignmentListResponse
 )

@@ -43,6 +43,64 @@ def _can_approve(user: User, tracking: IndicatorTracking, db: Session) -> bool:
     return False
 
 
+def _ensure_tracking_for_assignment(db: Session, assignment: IndicatorAssignment) -> IndicatorTracking:
+    tracking = db.query(IndicatorTracking).filter(
+        IndicatorTracking.assignment_id == assignment.id
+    ).first()
+
+    if tracking:
+        return tracking
+
+    tracking = IndicatorTracking(
+        user_id=assignment.user_id,
+        assignment_id=assignment.id,
+        year=assignment.year,
+        month=assignment.month,
+        status="PENDING",
+        is_closed=False,
+        approval_status="PENDIENTE",
+    )
+    db.add(tracking)
+    db.flush()
+    return tracking
+
+
+def submit_assignment(db: Session, assignment_id: UUID, current_user: User) -> IndicatorTracking:
+    assignment = _get_assignment_or_404(db, assignment_id)
+
+    if not assignment.is_active:
+        raise HTTPException(status_code=400, detail="La asignación está cerrada")
+
+    if assignment.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Solo el colaborador asignado puede enviar este KPI")
+
+    tracking = _ensure_tracking_for_assignment(db, assignment)
+
+    if tracking.approval_status == "APROBADO":
+        raise HTTPException(status_code=400, detail="El KPI ya está aprobado y no puede modificarse")
+
+    if tracking.approval_status == "EN_REVISION":
+        raise HTTPException(status_code=400, detail="El KPI ya está en revisión")
+
+    if tracking.achieved_value is None:
+        raise HTTPException(status_code=400, detail="Debes registrar un valor antes de enviar a revisión")
+
+    tracking.approval_status = "EN_REVISION"
+    tracking.submitted_at = datetime.utcnow()
+    tracking.submitted_by = current_user.id
+    tracking.status = "COMPLETED"
+
+    db.commit()
+    db.refresh(tracking)
+
+    try:
+        notification_service.notify_leader_submitted(db, tracking, current_user)
+    except Exception:
+        pass
+
+    return tracking
+
+
 def submit_tracking(db: Session, tracking_id: UUID, current_user: User) -> IndicatorTracking:
     tracking = _get_tracking_or_404(db, tracking_id)
 

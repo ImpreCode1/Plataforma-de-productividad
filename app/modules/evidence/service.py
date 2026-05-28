@@ -1,5 +1,6 @@
 import os
 import uuid
+from uuid import UUID
 from datetime import datetime
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
@@ -118,6 +119,85 @@ def create_evidence_for_tracking(db: Session, file: UploadFile, tracking_id: str
 
     evidence = Evidence(
         tracking_id=tracking_id,
+        user_id=tracking.user_id,
+        year=tracking.year,
+        month=tracking.month,
+        file_path=file_path,
+        original_filename=original_name,
+        file_size=file_size,
+        uploaded_by=current_user.id,
+        uploaded_at=datetime.utcnow()
+    )
+
+    db.add(evidence)
+    db.commit()
+    db.refresh(evidence)
+    return evidence
+
+
+# ------------------------------------------------
+# CREATE EVIDENCE (per assignment, auto-creates tracking)
+# ------------------------------------------------
+
+def _ensure_tracking_for_assignment(db: Session, assignment_id: UUID, user_id: UUID) -> IndicatorTracking:
+    tracking = db.query(IndicatorTracking).filter(
+        IndicatorTracking.assignment_id == assignment_id
+    ).first()
+
+    if tracking:
+        return tracking
+
+    from app.models.indicator_assignment import IndicatorAssignment
+    assignment = db.query(IndicatorAssignment).filter(
+        IndicatorAssignment.id == assignment_id,
+        IndicatorAssignment.is_active == True
+    ).first()
+
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Asignación no encontrada")
+
+    tracking = IndicatorTracking(
+        user_id=assignment.user_id,
+        assignment_id=assignment.id,
+        year=assignment.year,
+        month=assignment.month,
+        status="PENDING",
+        is_closed=False,
+        approval_status="PENDIENTE",
+    )
+    db.add(tracking)
+    db.flush()
+    return tracking
+
+
+def create_evidence_for_assignment(db: Session, file: UploadFile, assignment_id: UUID, current_user: User) -> Evidence:
+    from app.models.indicator_assignment import IndicatorAssignment
+
+    assignment = db.query(IndicatorAssignment).filter(
+        IndicatorAssignment.id == assignment_id,
+        IndicatorAssignment.is_active == True
+    ).first()
+
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Asignación no encontrada")
+
+    user_roles = [ur.role.name for ur in current_user.roles if ur.role]
+    is_owner = assignment.user_id == current_user.id
+    is_leader = "LEADER" in user_roles
+    is_admin = "ADMIN" in user_roles
+
+    if not (is_owner or is_leader or is_admin):
+        raise HTTPException(status_code=403, detail="No autorizado para subir evidencias a este KPI")
+
+    tracking = _ensure_tracking_for_assignment(db, assignment_id, current_user.id)
+
+    if tracking.approval_status == "APROBADO":
+        raise HTTPException(status_code=400, detail="El KPI está aprobado, no se pueden subir más evidencias")
+
+    file_path, original_name, file_size = save_file(file)
+
+    evidence = Evidence(
+        tracking_id=tracking.id,
         user_id=tracking.user_id,
         year=tracking.year,
         month=tracking.month,

@@ -46,6 +46,23 @@ def upload_evidence_to_tracking(
 
 
 # ------------------------------------------------
+# UPLOAD EVIDENCE PER ASSIGNMENT (auto-creates tracking)
+# ------------------------------------------------
+
+@router.post(
+    "/assignment/{assignment_id}",
+    response_model=EvidenceUploadResponse,
+)
+def upload_evidence_to_assignment(
+    assignment_id: UUID,
+    db: DBSession,
+    current_user: CurrentUser,
+    file: UploadFile = File(...),
+):
+    return service.create_evidence_for_assignment(db, file, assignment_id, current_user)
+
+
+# ------------------------------------------------
 # LIST BY MONTH (EMPLOYEE: own, LEADER: team, ADMIN: all)
 # ------------------------------------------------
 
