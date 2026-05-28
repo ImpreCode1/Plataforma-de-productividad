@@ -16,7 +16,7 @@ UPLOAD_DIR = "app/uploads/evidences"
 # SAVE FILE 🔥
 # ------------------------------------------------
 
-def save_file(file: UploadFile) -> str:
+def save_file(file: UploadFile) -> tuple[str, str, int]:
 
     # Validar tipo
     allowed_types = ["application/pdf", "image/png", "image/jpeg"]
@@ -25,7 +25,8 @@ def save_file(file: UploadFile) -> str:
         raise HTTPException(status_code=400, detail="Invalid file type")
 
     # Generar nombre único
-    extension = file.filename.split(".")[-1]
+    original_name = file.filename or "archivo"
+    extension = original_name.split(".")[-1] if "." in original_name else "pdf"
     filename = f"{uuid.uuid4()}.{extension}"
 
     file_path = f"/uploads/evidences/{filename}"
@@ -33,10 +34,14 @@ def save_file(file: UploadFile) -> str:
 
     os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-    with open(full_path, "wb") as buffer:
-        buffer.write(file.file.read())
+    file.file.seek(0)
+    content = file.file.read()
+    file_size = len(content)
 
-    return file_path
+    with open(full_path, "wb") as buffer:
+        buffer.write(content)
+
+    return file_path, original_name, file_size
 
 
 # ------------------------------------------------
@@ -87,12 +92,55 @@ def check_evidence_ownership(db: Session, evidence_id, user_id):
 
 
 # ------------------------------------------------
-# CREATE EVIDENCE
+# CREATE EVIDENCE (per tracking)
+# ------------------------------------------------
+
+def create_evidence_for_tracking(db: Session, file: UploadFile, tracking_id: str, current_user: User) -> Evidence:
+    tracking = db.query(IndicatorTracking).filter(
+        IndicatorTracking.id == tracking_id
+    ).first()
+
+    if not tracking:
+        raise HTTPException(status_code=404, detail="Tracking no encontrado")
+
+    if tracking.approval_status == "APROBADO":
+        raise HTTPException(status_code=400, detail="El KPI está aprobado, no se pueden subir más evidencias")
+
+    user_roles = [ur.role.name for ur in current_user.roles if ur.role]
+    is_owner = tracking.user_id == current_user.id
+    is_leader = "LEADER" in user_roles and tracking.user and tracking.user.leader_id == current_user.id
+    is_admin = "ADMIN" in user_roles
+
+    if not (is_owner or is_leader or is_admin):
+        raise HTTPException(status_code=403, detail="No autorizado para subir evidencias a este KPI")
+
+    file_path, original_name, file_size = save_file(file)
+
+    evidence = Evidence(
+        tracking_id=tracking_id,
+        user_id=tracking.user_id,
+        year=tracking.year,
+        month=tracking.month,
+        file_path=file_path,
+        original_filename=original_name,
+        file_size=file_size,
+        uploaded_by=current_user.id,
+        uploaded_at=datetime.utcnow()
+    )
+
+    db.add(evidence)
+    db.commit()
+    db.refresh(evidence)
+    return evidence
+
+
+# ------------------------------------------------
+# CREATE EVIDENCE (legacy, per month)
 # ------------------------------------------------
 
 def create_evidence(db: Session, file: UploadFile, user_id, tracking_id=None, year=None, month=None, target_user_id=None):
 
-    file_path = save_file(file)
+    file_path, original_name, file_size = save_file(file)
 
     if tracking_id:
         tracking = db.query(IndicatorTracking).filter(
@@ -111,6 +159,8 @@ def create_evidence(db: Session, file: UploadFile, user_id, tracking_id=None, ye
         evidence = Evidence(
             tracking_id=tracking_id,
             file_path=file_path,
+            original_filename=original_name,
+            file_size=file_size,
             uploaded_by=user_id,
             uploaded_at=datetime.utcnow()
         )
@@ -127,6 +177,8 @@ def create_evidence(db: Session, file: UploadFile, user_id, tracking_id=None, ye
             year=year,
             month=month,
             file_path=file_path,
+            original_filename=original_name,
+            file_size=file_size,
             uploaded_by=user_id,
             uploaded_at=datetime.utcnow()
         )
@@ -150,7 +202,7 @@ def list_evidences_by_month(db: Session, user_id, year, month):
 
 
 # ------------------------------------------------
-# LIST EVIDENCE
+# LIST EVIDENCE BY TRACKING
 # ------------------------------------------------
 
 def list_evidence(db: Session, tracking_id):
@@ -161,7 +213,7 @@ def list_evidence(db: Session, tracking_id):
 
 
 # ------------------------------------------------
-# DELETE EVIDENCE
+# DELETE EVIDENCE (only if tracking not approved)
 # ------------------------------------------------
 
 def delete_evidence(db: Session, evidence_id):
@@ -172,6 +224,13 @@ def delete_evidence(db: Session, evidence_id):
 
     if not evidence:
         raise HTTPException(status_code=404, detail="Evidence not found")
+
+    if evidence.tracking_id:
+        tracking = db.query(IndicatorTracking).filter(
+            IndicatorTracking.id == evidence.tracking_id
+        ).first()
+        if tracking and tracking.approval_status == "APROBADO":
+            raise HTTPException(status_code=400, detail="No se puede eliminar evidencia de un KPI aprobado")
 
     full_path = os.path.join(UPLOAD_DIR, evidence.file_path.split("/")[-1])
     if os.path.exists(full_path):

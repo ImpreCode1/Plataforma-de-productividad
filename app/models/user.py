@@ -36,7 +36,7 @@ class User(Base):
 
     roles = relationship("UserRole", back_populates="user")
     assignments = relationship("IndicatorAssignment", back_populates="user")
-    trackings = relationship("IndicatorTracking", back_populates="user")
+    trackings = relationship("IndicatorTracking", foreign_keys="IndicatorTracking.user_id", back_populates="user")
 
     @property
     def roles_flat(self):

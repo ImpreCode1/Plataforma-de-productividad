@@ -5,4 +5,5 @@ from .base import Base
 from .tracking import IndicatorTracking
 from .evidence import Evidence
 from .action_plan import ActionPlan
+from .approval_config import ApprovalConfig
 
