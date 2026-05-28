@@ -16,6 +16,7 @@ from app.modules.action_plan.router import router as action_plan_router
 from app.modules.dashboard.router import router as dashboard_router
 from app.modules.roles.router import router as roles_router
 from app.modules.team.router import router as team_router
+from app.modules.notifications.router import router as notifications_router
 
 
 app = FastAPI(
@@ -58,6 +59,7 @@ app.include_router(action_plan_router, dependencies=[Depends(get_current_user)])
 app.include_router(dashboard_router, dependencies=[Depends(get_current_user)])
 app.include_router(team_router, dependencies=[Depends(get_current_user)])
 app.include_router(roles_router)
+app.include_router(notifications_router, dependencies=[Depends(get_current_user)])
 
 
 @app.get("/")

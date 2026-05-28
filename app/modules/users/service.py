@@ -45,6 +45,47 @@ from app.models.user import User
 from app.models.role import Role, UserRole
 
 
+def normalize_area(area):
+    if not area:
+        return None
+    area = area.strip().lower()
+    area_mapping = {
+        "innovation business": "INNOVATION",
+        "innovation": "INNOVATION",
+        "human talent and administrative vice president": "HUMAN TALENT AND ADMINISTRATIVE",
+        "human talent and administrative vicepresident": "HUMAN TALENT AND ADMINISTRATIVE",
+        "human talent and administrative": "HUMAN TALENT AND ADMINISTRATIVE",
+        "human talent": "HUMAN TALENT AND ADMINISTRATIVE",
+        "human talent & administrative": "HUMAN TALENT AND ADMINISTRATIVE",
+        "financial officer": "FINANCIAL OFFICER",
+        "go to market": "GO TO MARKET",
+        "it solutions": "IT SOLUTIONS",
+        "executive office": "EXECUTIVE OFFICE",
+        "expansion": "EXPANSION",
+        "presidency": "PRESIDENCY",
+        "human talent and administrative vp": "HUMAN TALENT AND ADMINISTRATIVE",
+    }
+    return area_mapping.get(area, area.upper())
+
+
+def get_unique_areas(db: Session):
+    areas = db.query(User.area).filter(
+        User.area.isnot(None),
+        User.area != "",
+        User.is_active == True
+    ).distinct().all()
+
+    normalized_areas = set()
+    for a in areas:
+        if not a[0]:
+            continue
+        normalized = normalize_area(a[0].strip())
+        if normalized:
+            normalized_areas.add(normalized)
+
+    return sorted(list(normalized_areas))
+
+
 def list_users(db: Session):
     users = db.query(User).all()
 
@@ -175,16 +216,43 @@ def create_user(db: Session, data):
 
 
 def change_status(db: Session, user_id: UUID, is_active: bool):
-    user = db.query(User).filter(User.id == user_id).first()
+    user = (
+        db.query(User)
+        .options(selectinload(User.leader))
+        .filter(User.id == user_id)
+        .first()
+    )
 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     user.is_active = is_active
+
+    if not is_active:
+        user.leader_id = None
+
     db.commit()
     db.refresh(user)
 
-    return {"message": "Status updated"}
+    return {
+        "id": user.id,
+        "document_number": user.document_number,
+        "name": user.name,
+        "email": user.email,
+        "position_name": user.position_name,
+        "area": user.area,
+        "subarea": user.subarea,
+        "direccion": user.direccion,
+        "linea": user.linea,
+        "numero_linea": user.numero_linea,
+        "hire_date": user.hire_date,
+        "contract_type": user.contract_type,
+        "salary_type": user.salary_type,
+        "leader_id": user.leader_id,
+        "leader_name": user.leader.name if user.leader else None,
+        "is_active": user.is_active,
+        "roles": user.roles_flat,
+    }
 
 
 # ------------------------------------------------

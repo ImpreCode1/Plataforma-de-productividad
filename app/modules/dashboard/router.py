@@ -1,6 +1,7 @@
 from uuid import UUID
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 
 from app.core.security.dependencies import DBSession, CurrentUser, require_roles
 from app.modules.dashboard import service
@@ -74,7 +75,30 @@ def get_team_dashboard(
 def get_global_dashboard(
     year: int = Query(default=...),
     month: Optional[int] = Query(default=None),
+    area: Optional[str] = Query(default=None),
     db: DBSession = DBSession,
     current_user: CurrentUser = CurrentUser
 ):
-    return service.get_global_dashboard(db, year, month)
+    return service.get_global_dashboard(db, year, month, area)
+
+
+# ------------------------------------------------
+# GLOBAL REPORT EXCEL (ADMIN)
+# ------------------------------------------------
+
+@router.get(
+    "/global/report",
+    dependencies=[Depends(require_roles("ADMIN"))]
+)
+def get_global_report(
+    year: int = Query(default=...),
+    area: Optional[str] = Query(default=None),
+    db: DBSession = DBSession,
+    current_user: CurrentUser = CurrentUser
+):
+    excel_file = service.generate_global_report(db, year, area)
+    return StreamingResponse(
+        excel_file,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=reporte_kpi_{year}.xlsx"}
+    )
