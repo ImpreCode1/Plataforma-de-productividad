@@ -1,6 +1,7 @@
 import os
 import uuid
 from uuid import UUID
+from decimal import Decimal
 from datetime import datetime
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
@@ -212,6 +213,62 @@ def create_evidence_for_assignment(db: Session, file: UploadFile, assignment_id:
     db.commit()
     db.refresh(evidence)
     return evidence
+
+
+# ------------------------------------------------
+# SET VALUE (achieved_value / achieved_total) per assignment
+# ------------------------------------------------
+
+def set_assignment_value(db: Session, assignment_id: UUID, achieved_value: Decimal, achieved_total: Decimal | None, current_user: User) -> IndicatorTracking:
+    from app.models.indicator_assignment import IndicatorAssignment
+
+    assignment = db.query(IndicatorAssignment).filter(
+        IndicatorAssignment.id == assignment_id,
+        IndicatorAssignment.is_active == True
+    ).first()
+
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Asignación no encontrada")
+
+    if assignment.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="No autorizado para modificar este KPI")
+
+    tracking = _ensure_tracking_for_assignment(db, assignment_id, current_user.id)
+
+    if tracking.approval_status == "APROBADO":
+        raise HTTPException(status_code=400, detail="El KPI está aprobado y no puede editarse")
+
+    tracking.achieved_value = achieved_value
+    tracking.achieved_total = achieved_total
+
+    if achieved_total is not None and achieved_total > 0:
+        achievement_percentage = (achieved_value / achieved_total) * 100
+    elif assignment.target_value is not None and assignment.target_value > 0:
+        achievement_percentage = (achieved_value / assignment.target_value) * 100
+    else:
+        achievement_percentage = 0
+
+    weighted_score = (achievement_percentage * (assignment.weight or 0)) / 100
+
+    tracking.achievement_percentage = round(achievement_percentage, 2)
+    tracking.weighted_score = round(weighted_score, 2)
+
+    target_met = False
+    if achieved_total is not None and achieved_total > 0:
+        target_met = achieved_value >= achieved_total
+    elif assignment.target_value is not None:
+        target_met = achieved_value >= assignment.target_value
+
+    tracking.target_met = target_met
+    tracking.status = "COMPLETED"
+
+    if tracking.approval_status == "RECHAZADO":
+        tracking.approval_status = "PENDIENTE"
+        tracking.rejection_comment = None
+
+    db.commit()
+    db.refresh(tracking)
+    return tracking
 
 
 # ------------------------------------------------

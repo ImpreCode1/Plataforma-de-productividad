@@ -235,9 +235,11 @@ def send_notifications(db: Session, recipient_type: str, recipient_ids: List[str
     try:
         server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT)
         server.ehlo()
-        server.starttls()
-        server.ehlo()
-        server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+        if settings.SMTP_USE_TLS:
+            server.starttls()
+            server.ehlo()
+        if settings.SMTP_USER:
+            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
         
         for user in users:
             try:
@@ -286,9 +288,11 @@ def _send_single_email(to_email: str, to_name: str, subject: str, html_body: str
     try:
         server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT)
         server.ehlo()
-        server.starttls()
-        server.ehlo()
-        server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+        if settings.SMTP_USE_TLS:
+            server.starttls()
+            server.ehlo()
+        if settings.SMTP_USER:
+            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
 
         from_address = settings.SMTP_FROM if settings.SMTP_FROM else settings.SMTP_USER
         msg = MIMEMultipart()

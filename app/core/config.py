@@ -1,7 +1,7 @@
 import os
 
 def load_env():
-    env_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+    env_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.env')
     if not os.path.exists(env_file):
         return
     with open(env_file, 'r') as f:
@@ -31,5 +31,6 @@ class Settings:
     SMTP_PASSWORD: str = os.getenv("MAIL_PASSWORD", "")
     SMTP_FROM: str = os.getenv("MAIL_FROM_ADDRESS", "")
     SMTP_FROM_NAME: str = os.getenv("MAIL_FROM_NAME", "Plataforma de Productividad")
+    SMTP_USE_TLS: bool = os.getenv("MAIL_SECURE", "true").lower() == "true"
 
 settings = Settings()

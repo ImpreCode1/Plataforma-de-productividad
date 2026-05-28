@@ -3,7 +3,8 @@ from fastapi import APIRouter, UploadFile, File, Form, Depends, Query
 
 from app.core.security.dependencies import DBSession, CurrentUser, require_roles
 from app.modules.evidence import service
-from app.modules.evidence.schemas import EvidenceResponse, EvidenceListResponse, EvidenceUploadResponse
+from app.modules.evidence.schemas import EvidenceResponse, EvidenceListResponse, EvidenceUploadResponse, SetValueRequest
+from app.modules.approval.schemas import TrackingApprovalResponse
 
 router = APIRouter(
     prefix="/evidence",
@@ -43,6 +44,23 @@ def upload_evidence_to_tracking(
     file: UploadFile = File(...),
 ):
     return service.create_evidence_for_tracking(db, file, str(tracking_id), current_user)
+
+
+# ------------------------------------------------
+# SET VALUE PER ASSIGNMENT (auto-creates tracking)
+# ------------------------------------------------
+
+@router.patch(
+    "/assignment/{assignment_id}/value",
+    response_model=TrackingApprovalResponse,
+)
+def set_tracking_value(
+    assignment_id: UUID,
+    data: SetValueRequest,
+    db: DBSession,
+    current_user: CurrentUser,
+):
+    return service.set_assignment_value(db, assignment_id, data.achieved_value, data.achieved_total, current_user)
 
 
 # ------------------------------------------------

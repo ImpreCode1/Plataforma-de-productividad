@@ -1,4 +1,5 @@
 from uuid import UUID
+from decimal import Decimal
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
@@ -30,3 +31,8 @@ class EvidenceUploadResponse(BaseModel):
     original_filename: Optional[str] = None
     file_size: Optional[int] = None
     uploaded_at: Optional[datetime] = None
+
+
+class SetValueRequest(BaseModel):
+    achieved_value: Decimal
+    achieved_total: Optional[Decimal] = None
