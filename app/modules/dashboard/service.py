@@ -1,8 +1,10 @@
+from collections import defaultdict
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from uuid import UUID
 
 from app.models.user import User
+from app.models.role import Role, UserRole
 from app.models.indicator_assignment import IndicatorAssignment
 from app.models.tracking import IndicatorTracking
 from app.models.action_plan import ActionPlan
@@ -138,12 +140,10 @@ def get_team_dashboard(db: Session, leader_id: UUID, year: int, month: int = Non
 # ------------------------------------------------
 
 def get_global_dashboard(db: Session, year: int, month: int = None, area: str = None):
-
     from app.modules.users.service import normalize_area
+    from collections import defaultdict
 
-    all_users_query = db.query(User).filter(User.is_active == True)
-
-    all_users = all_users_query.all()
+    all_users = db.query(User).filter(User.is_active == True).all()
 
     if area:
         normalized_area = normalize_area(area)
@@ -153,7 +153,12 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
                 if normalize_area(u.area) == normalized_area
             ]
 
+    if not all_users:
+        return empty_global_dashboard(year, month)
+
     filter_month = month
+    user_ids = [u.id for u in all_users]
+    user_map = {u.id: u for u in all_users}
 
     total_users = len(all_users)
     total_indicators = 0
@@ -164,114 +169,174 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
 
     monthly_stats = {m: {"total": 0, "closed": 0, "plans": 0, "evidence": 0, "score": 0} for m in range(1, 13)}
 
+    # 1. BATCH: all assignments for the year
+    all_assignments = db.query(IndicatorAssignment).filter(
+        IndicatorAssignment.user_id.in_(user_ids),
+        IndicatorAssignment.year == year,
+        IndicatorAssignment.is_active == True
+    ).all()
+
+    assigments_by_user = defaultdict(list)
+    for a in all_assignments:
+        assigments_by_user[a.user_id].append(a)
+
+    # 2. BATCH: all trackings for the year
+    tracking_query = db.query(IndicatorTracking).filter(
+        IndicatorTracking.user_id.in_(user_ids),
+        IndicatorTracking.year == year
+    )
+    if filter_month:
+        tracking_query = tracking_query.filter(IndicatorTracking.month == filter_month)
+    all_trackings = tracking_query.all()
+
+    trackings_by_user = defaultdict(list)
+    tracking_ids = []
+    for t in all_trackings:
+        trackings_by_user[t.user_id].append(t)
+        tracking_ids.append(t.id)
+
+    # 3. BATCH: action plans
+    plans_by_tracking = defaultdict(int)
+    if tracking_ids:
+        plan_counts = db.query(
+            ActionPlan.tracking_id, func.count(ActionPlan.id)
+        ).filter(
+            ActionPlan.tracking_id.in_(tracking_ids)
+        ).group_by(ActionPlan.tracking_id).all()
+        for tid, cnt in plan_counts:
+            plans_by_tracking[tid] = cnt
+
+    # 4. BATCH: evidences linked to trackings
+    ev_by_tracking = defaultdict(int)
+    if tracking_ids:
+        ev_counts = db.query(
+            Evidence.tracking_id, func.count(Evidence.id)
+        ).filter(
+            Evidence.tracking_id.in_(tracking_ids)
+        ).group_by(Evidence.tracking_id).all()
+        for tid, cnt in ev_counts:
+            ev_by_tracking[tid] = cnt
+
+    # 5. BATCH: evidences without tracking per user
+    ev_without_q = db.query(
+        Evidence.user_id, func.count(Evidence.id)
+    ).filter(
+        Evidence.user_id.in_(user_ids),
+        Evidence.year == year,
+        Evidence.tracking_id == None
+    )
+    if filter_month:
+        ev_without_q = ev_without_q.filter(Evidence.month == filter_month)
+    ev_without_by_user = defaultdict(int, ev_without_q.group_by(Evidence.user_id).all())
+
+    # 6. BATCH: leader names
+    leader_ids = set(u.leader_id for u in all_users if u.leader_id)
+    leaders = {}
+    if leader_ids:
+        leader_users = db.query(User).filter(User.id.in_(leader_ids)).all()
+        leaders = {l.id: l.name for l in leader_users}
+
+    # 7. BATCH: subordinate counts (is_leader check)
+    sub_counts = db.query(
+        User.leader_id, func.count(User.id)
+    ).filter(
+        User.leader_id.in_(user_ids)
+    ).group_by(User.leader_id).all()
+    is_leader_map = {lid: True for lid, _ in sub_counts}
+
+    # 8. BATCH: user roles
+    user_roles_data = db.query(UserRole).filter(
+        UserRole.user_id.in_(user_ids)
+    ).all()
+    role_ids = set(ur.role_id for ur in user_roles_data)
+    role_name_map = {}
+    if role_ids:
+        roles = db.query(Role).filter(Role.id.in_(role_ids)).all()
+        role_name_map = {r.id: r.name for r in roles}
+    role_names_by_user = defaultdict(set)
+    for ur in user_roles_data:
+        if ur.role_id in role_name_map:
+            role_names_by_user[ur.user_id].add(role_name_map[ur.role_id])
+
+    # 9. BATCH: evidences per user+tracking for indicator detail
+    ev_detail_q = db.query(
+        Evidence.tracking_id, Evidence.user_id, Evidence.year, Evidence.month, func.count(Evidence.id)
+    ).filter(
+        Evidence.user_id.in_(user_ids),
+        Evidence.year == year,
+    )
+    if filter_month:
+        ev_detail_q = ev_detail_q.filter(Evidence.month == filter_month)
+    ev_detail_counts = ev_detail_q.group_by(
+        Evidence.tracking_id, Evidence.user_id, Evidence.year, Evidence.month
+    ).all()
+    ev_detail_map = defaultdict(int)
+    for tid, uid, y, m, cnt in ev_detail_counts:
+        ev_detail_map[(tid, uid, y, m)] = cnt
+
     team_summary = []
 
     for user in all_users:
-        is_leader = db.query(User).filter(User.leader_id == user.id).count() > 0
+        uid = user.id
+        is_leader = uid in is_leader_map
+        roles_for_user = role_names_by_user.get(uid, set())
+        is_admin_role = "ADMIN" in roles_for_user
+        is_leader_role = "LEADER" in roles_for_user
 
-        is_admin_role = any(
-            ur.role.name == "ADMIN"
-            for ur in user.roles if ur.role
-        ) if user.roles else False
-
-        is_leader_role = any(
-            ur.role.name == "LEADER"
-            for ur in user.roles if ur.role
-        ) if user.roles else False
-
-        all_assignments = db.query(IndicatorAssignment).filter(
-            IndicatorAssignment.user_id == user.id,
-            IndicatorAssignment.year == year,
-            IndicatorAssignment.is_active == True
-        ).all()
-
+        raw_assignments = assigments_by_user.get(uid, [])
         if filter_month:
-            assignments = [a for a in all_assignments if a.month == filter_month]
+            assignments = [a for a in raw_assignments if a.month == filter_month]
         else:
-            assignments = all_assignments
-        
+            assignments = raw_assignments
         user_indicators = len(assignments)
-
         total_indicators += user_indicators
 
-        query = db.query(IndicatorTracking).filter(
-            IndicatorTracking.user_id == user.id,
-            IndicatorTracking.year == year
-        )
-
-        if filter_month:
-            query = query.filter(IndicatorTracking.month == filter_month)
-
-        trackings = query.all()
-
+        trackings = trackings_by_user.get(uid, [])
         tracked_count = len([t for t in trackings if t.status in ["COMPLETED", "CLOSED"]])
         closed_count = len([t for t in trackings if t.is_closed])
         total_tracked += tracked_count
         total_closed += closed_count
 
         user_plans = 0
-        user_evidence = 0
-
         evidence_from_trackings = 0
         for t in trackings:
-            plans = db.query(ActionPlan).filter(
-                ActionPlan.tracking_id == t.id
-            ).count()
-            user_plans += plans
+            p_cnt = plans_by_tracking.get(t.id, 0)
+            user_plans += p_cnt
+            e_cnt = ev_by_tracking.get(t.id, 0)
+            evidence_from_trackings += e_cnt
 
-            evidence_from_trackings += db.query(Evidence).filter(
-                Evidence.tracking_id == t.id
-            ).count()
+            ms = monthly_stats[t.month]
+            ms["total"] += 1
+            if t.is_closed:
+                ms["closed"] += 1
+            ms["plans"] += p_cnt
+            ms["evidence"] += 1
+            if t.weighted_score:
+                ms["score"] += t.weighted_score
 
-            if t.month in monthly_stats:
-                monthly_stats[t.month]["total"] += 1
-                if t.is_closed:
-                    monthly_stats[t.month]["closed"] += 1
-                monthly_stats[t.month]["plans"] += plans
-                monthly_stats[t.month]["evidence"] += 1
-                if t.weighted_score:
-                    monthly_stats[t.month]["score"] += t.weighted_score
-
-        evidence_without_tracking = db.query(Evidence).filter(
-            Evidence.user_id == user.id,
-            Evidence.year == year
-        )
-        if filter_month:
-            evidence_without_tracking = evidence_without_tracking.filter(Evidence.month == filter_month)
-        evidence_without_tracking = evidence_without_tracking.filter(Evidence.tracking_id == None).count()
-
-        user_evidence = evidence_from_trackings + evidence_without_tracking
-
+        evidence_without = ev_without_by_user.get(uid, 0)
+        user_evidence = evidence_from_trackings + evidence_without
         total_action_plans += user_plans
         total_evidence += user_evidence
 
-        if user.leader_id:
-            leader = db.query(User).filter(User.id == user.leader_id).first()
-            leader_name = leader.name if leader else "Sin líder"
-        else:
-            leader_name = "Sin líder"
+        leader_name = leaders.get(user.leader_id) if user.leader_id else "Sin líder"
 
         user_score = 0
         if trackings and assignments:
             indicator_groups = {}
             for assignment in assignments:
-                indicator_name = assignment.indicator_name
-                if indicator_name not in indicator_groups:
-                    indicator_groups[indicator_name] = {
-                        "weight": assignment.weight or 0,
-                        "trackings": []
-                    }
-                trackings_ind = [t for t in trackings if t.assignment_id == assignment.id]
-                if filter_month:
-                    trackings_ind = [t for t in trackings_ind if t.month == filter_month]
-                indicator_groups[indicator_name]["trackings"].extend(trackings_ind)
-            
-            for ind_name, ind_data in indicator_groups.items():
+                ind_name = assignment.indicator_name
+                if ind_name not in indicator_groups:
+                    indicator_groups[ind_name] = {"weight": assignment.weight or 0, "trackings": []}
+                indicator_groups[ind_name]["trackings"].extend(
+                    [t for t in trackings if t.assignment_id == assignment.id]
+                )
+
+            for ind_data in indicator_groups.values():
                 trackings_with_data = [t for t in ind_data["trackings"] if t.achievement_percentage is not None]
                 if trackings_with_data:
-                    avg_achievement = sum(t.achievement_percentage for t in trackings_with_data) / len(trackings_with_data)
-                    weighted = (avg_achievement * ind_data["weight"]) / 100
-                    user_score += weighted
+                    avg = sum(t.achievement_percentage for t in trackings_with_data) / len(trackings_with_data)
+                    user_score += (avg * ind_data["weight"]) / 100
 
         indicators_by_name = {}
         for assignment in assignments:
@@ -282,11 +347,8 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
                     if filter_month and t.month != filter_month:
                         continue
 
-                    plans_count = db.query(ActionPlan).filter(ActionPlan.tracking_id == t.id).count()
-                    evidence_count = db.query(Evidence).filter(
-                        (Evidence.tracking_id == t.id) |
-                        ((Evidence.tracking_id == None) & (Evidence.user_id == t.user_id) & (Evidence.year == t.year) & (Evidence.month == t.month))
-                    ).count()
+                    plans_count = plans_by_tracking.get(t.id, 0)
+                    evidence_count = ev_by_tracking.get(t.id, 0) + ev_detail_map.get((None, t.user_id, t.year, t.month), 0)
 
                     month_data = {
                         "month": t.month,
@@ -340,7 +402,7 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
         indicators_detail = list(indicators_by_name.values())
 
         team_summary.append({
-            "user_id": str(user.id),
+            "user_id": str(uid),
             "name": user.name,
             "email": user.email,
             "position_name": user.position_name,
@@ -354,14 +416,14 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
             "indicators": indicators_detail,
             "is_leader": is_leader,
             "is_leader_role": is_leader_role,
-            "is_admin_role": is_admin_role
+            "is_admin_role": is_admin_role,
         })
 
     team_summary.sort(key=lambda x: x["score"], reverse=True)
 
     teams_data = {}
-    for user in team_summary:
-        leader = user["leader_name"]
+    for user_entry in team_summary:
+        leader = user_entry["leader_name"]
         if leader not in teams_data:
             teams_data[leader] = {
                 "leader_name": leader,
@@ -370,14 +432,14 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
                 "total_closed": 0,
                 "total_plans": 0,
                 "total_evidence": 0,
-                "total_score": 0
+                "total_score": 0,
             }
-        teams_data[leader]["members"].append(user)
-        teams_data[leader]["total_indicators"] += user["indicators_count"]
-        teams_data[leader]["total_closed"] += user["closed_months"]
-        teams_data[leader]["total_plans"] += user["action_plans"]
-        teams_data[leader]["total_evidence"] += user["evidence_count"]
-        teams_data[leader]["total_score"] += user["score"]
+        teams_data[leader]["members"].append(user_entry)
+        teams_data[leader]["total_indicators"] += user_entry["indicators_count"]
+        teams_data[leader]["total_closed"] += user_entry["closed_months"]
+        teams_data[leader]["total_plans"] += user_entry["action_plans"]
+        teams_data[leader]["total_evidence"] += user_entry["evidence_count"]
+        teams_data[leader]["total_score"] += user_entry["score"]
 
     for team in teams_data.values():
         member_count = len(team["members"])
@@ -395,7 +457,7 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
                 "closed": monthly_stats[m]["closed"],
                 "plans": monthly_stats[m]["plans"],
                 "evidence": monthly_stats[m]["evidence"],
-                "avg_score": round(monthly_stats[m]["score"] / monthly_stats[m]["total"], 2) if monthly_stats[m]["total"] > 0 else 0
+                "avg_score": round(monthly_stats[m]["score"] / monthly_stats[m]["total"], 2) if monthly_stats[m]["total"] > 0 else 0,
             })
 
     return {
@@ -408,7 +470,22 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
         "total_action_plans": total_action_plans,
         "total_evidence": total_evidence,
         "monthly_summary": monthly_summary,
-        "teams": teams_list
+        "teams": teams_list,
+    }
+
+
+def empty_global_dashboard(year: int, month: int = None):
+    return {
+        "year": year,
+        "month": month,
+        "total_users": 0,
+        "total_indicators": 0,
+        "total_tracked": 0,
+        "total_closed": 0,
+        "total_action_plans": 0,
+        "total_evidence": 0,
+        "monthly_summary": [],
+        "teams": [],
     }
 
 

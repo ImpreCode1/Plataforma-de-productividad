@@ -10,6 +10,7 @@ from app.modules.indicator_assignments.schemas import (
     IndicatorAssignmentListResponse,
     IndicatorAssignmentUpdate,
     ImportAssignmentsResponse,
+    ImportYearlyAssignmentsResponse,
     ReopenAssignmentRequest
 )
 
@@ -124,6 +125,23 @@ def import_assignments(
     file: UploadFile = File(...)
 ):
     return service.import_assignments_from_excel(db, file.file, year, month)
+
+
+# ------------------------------------------------
+# IMPORT EXCEL YEARLY (2025) 🔥
+# ------------------------------------------------
+
+@router.post(
+    "/import-excel-yearly",
+    response_model=ImportYearlyAssignmentsResponse,
+    dependencies=[Depends(require_roles("ADMIN"))]
+)
+def import_yearly_assignments(
+    db: DBSession,
+    current_user: CurrentUser,
+    file: UploadFile = File(...)
+):
+    return service.import_yearly_assignments_from_excel(db, file.file)
 
 
 # ------------------------------------------------

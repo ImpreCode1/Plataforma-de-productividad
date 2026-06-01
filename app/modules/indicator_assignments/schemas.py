@@ -68,3 +68,20 @@ class IndicatorData(BaseModel):
 class ReopenAssignmentRequest(BaseModel):
     month: int
     indicators: dict[str, IndicatorData]
+
+
+class YearlyTrackingError(BaseModel):
+    responsable: str
+    correo: Optional[str] = None
+    indicador: str
+    motivo: str
+
+
+class ImportYearlyAssignmentsResponse(BaseModel):
+    assignments_created: int = 0
+    trackings_created: int = 0
+    users_created: int = 0
+    users_matched: int = 0
+    already_existed: int = 0
+    without_data: int = 0
+    failed: List[YearlyTrackingError] = Field(default_factory=list)

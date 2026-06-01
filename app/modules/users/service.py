@@ -368,6 +368,7 @@ def update_user(db: Session, user_id: UUID, data: dict):
 def import_users_from_excel(db: Session, file):
 
     df = pd.read_excel(file)
+    df.columns = df.columns.str.strip()
 
     created = 0
     updated = 0
