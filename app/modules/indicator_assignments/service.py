@@ -282,29 +282,81 @@ def import_assignments_from_excel(db: Session, file, year: int, month: int = Non
 
     created = 0
     updated = 0
+    trackings_created = 0
+    users_created = 0
     failed = []
+    month_column_map = {m: (n, l) for n, l, m in MONTH_COLUMNS}
 
     users_by_name = {}
+    users_by_email = {}
     all_users = db.query(User).all()
     for user in all_users:
+        if user.email:
+            users_by_email[user.email.strip().lower()] = user
         normalized = normalize_name(user.name)
         users_by_name[normalized] = user
 
+    employee_role = db.query(Role).filter(Role.name == "EMPLOYEE").first()
+
     for _, row in df.iterrows():
+        email = str(row.get("Correo Corporativo", "")).strip().lower() if pd.notna(row.get("Correo Corporativo")) else ""
         responsible_name = str(row["Responsable"]).strip()
         normalized_name = normalize_name(responsible_name)
+        indicator_name = str(row.get("Nombre del Indicador", "")).strip().rstrip('.') if pd.notna(row.get("Nombre del Indicador")) else ""
+
+        if not indicator_name:
+            failed.append({
+                "responsable": responsible_name,
+                "correo": email or None,
+                "indicador": "",
+                "motivo": "Nombre del indicador vacío"
+            })
+            continue
+
         user = users_by_name.get(normalized_name)
+
+        if not user and email and email in users_by_email:
+            user = users_by_email[email]
+            users_by_name[normalize_name(user.name)] = user
 
         if not user:
             user = find_user_by_fuzzy_name(users_by_name, responsible_name)
 
+        if not user and email:
+            existing_by_email = db.query(User).filter(User.email == email).first()
+            if existing_by_email:
+                user = existing_by_email
+                users_by_email[email] = user
+                users_by_name[normalize_name(user.name)] = user
+
         if not user:
-            indicator_name = str(row.get("Nombre del Indicador", "")).strip().rstrip('.')
-            failed.append({
-                "responsable": responsible_name,
-                "indicador": indicator_name
-            })
-            continue
+            doc_number = f"EXT-{uuid.uuid4()}"
+            user = User(
+                document_number=doc_number,
+                name=responsible_name,
+                email=email if email else f"ext-{uuid.uuid4()}@external.com",
+                position_name=str(row.get("Cargo", "")).strip() if pd.notna(row.get("Cargo")) else None,
+                area=str(row.get("Vicepresidencia", "")).strip() if pd.notna(row.get("Vicepresidencia")) else None,
+                subarea=str(row.get("Área", "")).strip() if pd.notna(row.get("Área")) else None,
+                direccion=str(row.get("Dirección", "")).strip() if pd.notna(row.get("Dirección")) else None,
+                linea=str(row.get("Linea", "")).strip() if pd.notna(row.get("Linea")) else None,
+                numero_linea=str(row.get("# Linea", "")).strip() if pd.notna(row.get("# Linea")) else None,
+                is_active=False,
+            )
+            db.add(user)
+            db.flush()
+
+            if employee_role:
+                existing_ur = db.query(UserRole).filter(
+                    UserRole.user_id == user.id,
+                    UserRole.role_id == employee_role.id
+                ).first()
+                if not existing_ur:
+                    db.add(UserRole(user_id=user.id, role_id=employee_role.id))
+
+            users_by_email[user.email.strip().lower()] = user
+            users_by_name[normalize_name(user.name)] = user
+            users_created += 1
 
         if pd.notna(row.get("Vicepresidencia")):
             user.area = str(row["Vicepresidencia"]).strip()
@@ -349,6 +401,7 @@ def import_assignments_from_excel(db: Session, file, year: int, month: int = Non
             existing.direccion_at_assignment = str(row.get("Dirección", "")).strip() if pd.notna(row.get("Dirección")) else user.direccion
             existing.linea_at_assignment = str(row.get("Linea", "")).strip() if pd.notna(row.get("Linea")) else user.linea
             existing.numero_linea_at_assignment = str(row.get("# Linea", "")).strip() if pd.notna(row.get("# Linea")) else user.numero_linea
+            assignment = existing
             updated += 1
         else:
             assignment = IndicatorAssignment(
@@ -368,14 +421,62 @@ def import_assignments_from_excel(db: Session, file, year: int, month: int = Non
                 numero_linea_at_assignment=str(row.get("# Linea", "")).strip() if pd.notna(row.get("# Linea")) else user.numero_linea
             )
             db.add(assignment)
+            db.flush()
             created += 1
+
+        month_name, logro_name = month_column_map.get(month, (None, None))
+        if month_name and logro_name:
+            achieved_value, achieved_total = parse_achieved_value(row.get(month_name))
+            logro_value = safe_float(row.get(logro_name), default=None) if pd.notna(row.get(logro_name)) else None
+
+            existing_tracking = db.query(IndicatorTracking).filter(
+                IndicatorTracking.assignment_id == assignment.id,
+                IndicatorTracking.year == year,
+                IndicatorTracking.month == month,
+            ).first()
+
+            if existing_tracking:
+                existing_tracking.achieved_value = achieved_value
+                existing_tracking.achieved_total = achieved_total
+                existing_tracking.weighted_score = logro_value
+                existing_tracking.target_met = logro_value is not None
+                if achieved_value is not None and achieved_total is not None and achieved_total != 0:
+                    existing_tracking.achievement_percentage = round((achieved_value / achieved_total) * 100, 2)
+                elif achieved_value is not None:
+                    existing_tracking.achievement_percentage = achieved_value
+                if achieved_value is not None or logro_value is not None:
+                    existing_tracking.status = "CLOSED"
+                    existing_tracking.is_closed = True
+                    existing_tracking.approval_status = "APROBADO"
+            else:
+                tracking = IndicatorTracking(
+                    user_id=user.id,
+                    assignment_id=assignment.id,
+                    year=year,
+                    month=month,
+                    achieved_value=achieved_value,
+                    achieved_total=achieved_total,
+                    weighted_score=logro_value,
+                    target_met=logro_value is not None,
+                    status="CLOSED" if (achieved_value is not None or logro_value is not None) else "PENDING",
+                    is_closed=(achieved_value is not None or logro_value is not None),
+                    approval_status="APROBADO" if (achieved_value is not None or logro_value is not None) else "PENDIENTE",
+                )
+                if achieved_value is not None and achieved_total is not None and achieved_total != 0:
+                    tracking.achievement_percentage = round((achieved_value / achieved_total) * 100, 2)
+                elif achieved_value is not None:
+                    tracking.achievement_percentage = achieved_value
+                db.add(tracking)
+                trackings_created += 1
 
     db.commit()
 
     return {
         "created": created,
         "updated": updated,
-        "failed": failed
+        "trackings_created": trackings_created,
+        "users_created": users_created,
+        "failed": failed,
     }
 
 

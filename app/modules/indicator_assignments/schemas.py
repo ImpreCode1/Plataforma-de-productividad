@@ -54,6 +54,8 @@ class IndicatorAssignmentListResponse(BaseModel):
 class ImportAssignmentsResponse(BaseModel):
     created: int
     updated: int
+    trackings_created: int = 0
+    users_created: int = 0
     failed: List[dict] = Field(default_factory=list)
     message: Optional[str] = None
 
