@@ -442,8 +442,9 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
         teams_data[leader]["total_score"] += user_entry["score"]
 
     for team in teams_data.values():
-        member_count = len(team["members"])
-        team["avg_score"] = round(team["total_score"] / member_count, 2) if member_count > 0 else 0
+        members_with_data = [m for m in team["members"] if m["indicators_count"] > 0]
+        member_count = len(members_with_data) if members_with_data else 1
+        team["avg_score"] = round(team["total_score"] / member_count, 2)
         team["members"].sort(key=lambda x: x["score"], reverse=True)
 
     teams_list = sorted(teams_data.values(), key=lambda x: x["avg_score"], reverse=True)

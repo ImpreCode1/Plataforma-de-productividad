@@ -5,6 +5,7 @@ from fastapi import HTTPException
 import pandas as pd
 import re
 import unicodedata
+import datetime
 
 from app.models.indicator_assignment import IndicatorAssignment
 from app.models.tracking import IndicatorTracking
@@ -253,12 +254,18 @@ MONTHS_MAP = {
 def safe_float(value, default=0):
     if value is None or pd.isna(value):
         return default
+    if isinstance(value, datetime.time):
+        return round(value.hour + value.minute / 60 + value.second / 3600, 4)
     try:
         str_value = str(value).strip()
+        if ',' in str_value and '.' not in str_value:
+            str_value = str_value.replace(',', '.')
+        elif ',' in str_value and '.' in str_value:
+            str_value = str_value.replace(',', '')
         if str_value.endswith('%'):
-            str_value = str_value[:-1].replace(',', '.')
+            str_value = str_value[:-1]
             return float(str_value)
-        float_val = float(value)
+        float_val = float(str_value)
         if 0 < float_val <= 1:
             return round(float_val * 100, 2)
         return round(float_val, 2)
@@ -269,6 +276,9 @@ def safe_float(value, default=0):
 def import_assignments_from_excel(db: Session, file, year: int, month: int = None):
     df = pd.read_excel(file)
     df.columns = df.columns.str.strip()
+
+    if year:
+        normalize_existing_indicator_names(db, year)
 
     created = 0
     updated = 0
@@ -289,7 +299,7 @@ def import_assignments_from_excel(db: Session, file, year: int, month: int = Non
             user = find_user_by_fuzzy_name(users_by_name, responsible_name)
 
         if not user:
-            indicator_name = str(row.get("Nombre del Indicador", "")).strip()
+            indicator_name = str(row.get("Nombre del Indicador", "")).strip().rstrip('.')
             failed.append({
                 "responsable": responsible_name,
                 "indicador": indicator_name
@@ -309,7 +319,7 @@ def import_assignments_from_excel(db: Session, file, year: int, month: int = Non
         if pd.notna(row.get("Cargo")):
             user.position_name = str(row["Cargo"]).strip()
 
-        indicator_name = str(row["Nombre del Indicador"]).strip()
+        indicator_name = str(row["Nombre del Indicador"]).strip().rstrip('.')
         
         if month is None:
             for month_name, month_num in MONTHS_MAP.items():
@@ -473,6 +483,12 @@ def parse_achieved_value(value):
     if str_val in ("", "-", "N/A", "NA", "n/a"):
         return None, None
     
+    if str_val.upper() in ("SI", "YES"):
+        return 100.0, None
+    
+    if str_val.upper() in ("NO", "N"):
+        return 0.0, None
+    
     parts = str_val.split("/")
     if len(parts) == 2:
         try:
@@ -490,9 +506,48 @@ def parse_achieved_value(value):
     return None, None
 
 
+def normalize_existing_indicator_names(db: Session, year: int):
+    assignments = db.query(IndicatorAssignment).filter(
+        IndicatorAssignment.year == year,
+        IndicatorAssignment.indicator_name.like('%.')
+    ).all()
+
+    updated = 0
+    merged = 0
+
+    for assignment in assignments:
+        clean_name = assignment.indicator_name.rstrip('.')
+        if clean_name == assignment.indicator_name:
+            continue
+
+        existing = db.query(IndicatorAssignment).filter(
+            IndicatorAssignment.user_id == assignment.user_id,
+            IndicatorAssignment.year == assignment.year,
+            IndicatorAssignment.month == assignment.month,
+            IndicatorAssignment.indicator_name == clean_name
+        ).first()
+
+        if existing:
+            db.query(IndicatorTracking).filter(
+                IndicatorTracking.assignment_id == assignment.id
+            ).update({"assignment_id": existing.id})
+            db.delete(assignment)
+            merged += 1
+        else:
+            assignment.indicator_name = clean_name
+            updated += 1
+
+    if updated or merged:
+        db.commit()
+
+    return {"updated": updated, "merged": merged}
+
+
 def import_yearly_assignments_from_excel(db: Session, file):
     df = pd.read_excel(file)
     df.columns = df.columns.str.strip()
+    
+    normalize_existing_indicator_names(db, 2025)
     
     assignments_created = 0
     trackings_created = 0
@@ -518,7 +573,7 @@ def import_yearly_assignments_from_excel(db: Session, file):
     for _, row in df.iterrows():
         email = str(row.get("Correo Corporativo", "")).strip().lower() if pd.notna(row.get("Correo Corporativo")) else ""
         responsible_name = str(row.get("Responsable", "")).strip() if pd.notna(row.get("Responsable")) else ""
-        indicator_name = str(row.get("Nombre del Indicador", "")).strip() if pd.notna(row.get("Nombre del Indicador")) else ""
+        indicator_name = str(row.get("Nombre del Indicador", "")).strip().rstrip('.') if pd.notna(row.get("Nombre del Indicador")) else ""
 
         if not indicator_name:
             failed.append({
