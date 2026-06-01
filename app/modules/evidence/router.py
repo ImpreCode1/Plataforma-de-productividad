@@ -3,7 +3,8 @@ from fastapi import APIRouter, UploadFile, File, Form, Depends, Query
 
 from app.core.security.dependencies import DBSession, CurrentUser, require_roles
 from app.modules.evidence import service
-from app.modules.evidence.schemas import EvidenceResponse, EvidenceListResponse
+from app.modules.evidence.schemas import EvidenceResponse, EvidenceListResponse, EvidenceUploadResponse, SetValueRequest
+from app.modules.approval.schemas import TrackingApprovalResponse
 
 router = APIRouter(
     prefix="/evidence",
@@ -12,7 +13,7 @@ router = APIRouter(
 
 
 # ------------------------------------------------
-# UPLOAD TO ALL INDICATORS FOR MONTH (EMPLOYEE/LEADER/ADMIN)
+# UPLOAD TO ALL INDICATORS FOR MONTH (EMPLOYEE/LEADER/ADMIN) — LEGACY
 # ------------------------------------------------
 
 @router.post("/", response_model=EvidenceResponse, dependencies=[Depends(require_roles("EMPLOYEE", "LEADER", "ADMIN"))])
@@ -26,6 +27,57 @@ def upload_evidence_to_month(
 ):
     user_id = target_user_id or current_user.id
     return service.create_evidence(db, file, current_user.id, year=year, month=month, target_user_id=user_id)
+
+
+# ------------------------------------------------
+# UPLOAD EVIDENCE PER TRACKING (NEW)
+# ------------------------------------------------
+
+@router.post(
+    "/tracking/{tracking_id}",
+    response_model=EvidenceUploadResponse,
+)
+def upload_evidence_to_tracking(
+    tracking_id: UUID,
+    db: DBSession,
+    current_user: CurrentUser,
+    file: UploadFile = File(...),
+):
+    return service.create_evidence_for_tracking(db, file, str(tracking_id), current_user)
+
+
+# ------------------------------------------------
+# SET VALUE PER ASSIGNMENT (auto-creates tracking)
+# ------------------------------------------------
+
+@router.patch(
+    "/assignment/{assignment_id}/value",
+    response_model=TrackingApprovalResponse,
+)
+def set_tracking_value(
+    assignment_id: UUID,
+    data: SetValueRequest,
+    db: DBSession,
+    current_user: CurrentUser,
+):
+    return service.set_assignment_value(db, assignment_id, data.achieved_value, data.achieved_total, current_user)
+
+
+# ------------------------------------------------
+# UPLOAD EVIDENCE PER ASSIGNMENT (auto-creates tracking)
+# ------------------------------------------------
+
+@router.post(
+    "/assignment/{assignment_id}",
+    response_model=EvidenceUploadResponse,
+)
+def upload_evidence_to_assignment(
+    assignment_id: UUID,
+    db: DBSession,
+    current_user: CurrentUser,
+    file: UploadFile = File(...),
+):
+    return service.create_evidence_for_assignment(db, file, assignment_id, current_user)
 
 
 # ------------------------------------------------
@@ -46,7 +98,7 @@ def list_evidences_by_month(
 
 
 # ------------------------------------------------
-# LIST (EMPLOYEE: own, LEADER: team, ADMIN: all)
+# LIST BY TRACKING (EMPLOYEE: own, LEADER: team, ADMIN: all)
 # ------------------------------------------------
 
 @router.get("/{tracking_id}")

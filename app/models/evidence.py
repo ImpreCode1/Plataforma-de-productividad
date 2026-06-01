@@ -18,6 +18,8 @@ class Evidence(Base):
     month = Column(Integer, nullable=True)
 
     file_path = Column(String, nullable=False)
+    original_filename = Column(String, nullable=True)
+    file_size = Column(Integer, nullable=True)
 
     uploaded_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     uploaded_at = Column(DateTime, default=datetime.utcnow)

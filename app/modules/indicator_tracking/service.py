@@ -69,6 +69,12 @@ def get_team_tracking(db: Session, leader_id: UUID, year: int):
             "target_met": t.target_met,
             "status": t.status,
             "is_closed": t.is_closed,
+            "approval_status": t.approval_status,
+            "submitted_at": t.submitted_at.isoformat() if t.submitted_at else None,
+            "submitted_by": str(t.submitted_by) if t.submitted_by else None,
+            "approved_by": str(t.approved_by) if t.approved_by else None,
+            "approved_at": t.approved_at.isoformat() if t.approved_at else None,
+            "rejection_comment": t.rejection_comment,
             "action_plans": plans_data
         })
 
@@ -82,9 +88,11 @@ def get_team_tracking(db: Session, leader_id: UUID, year: int):
 def get_tracking_by_user(db: Session, user_id: UUID, year: int):
     from sqlalchemy.orm import joinedload
     from app.models.evidence import Evidence
+    from app.models.indicator_assignment import IndicatorAssignment
     
     trackings = db.query(IndicatorTracking).options(
-        joinedload(IndicatorTracking.evidences)
+        joinedload(IndicatorTracking.evidences),
+        joinedload(IndicatorTracking.assignment)
     ).filter(
         IndicatorTracking.user_id == user_id,
         IndicatorTracking.year == year
@@ -93,6 +101,11 @@ def get_tracking_by_user(db: Session, user_id: UUID, year: int):
     for t in trackings:
         t.evidence_count = len(t.evidences) if t.evidences else 0
         t.evidences = t.evidences or []
+        if t.assignment:
+            t.indicator_name = t.assignment.indicator_name
+            t.target_value = t.assignment.target_value
+            t.weight = t.assignment.weight
+            t.formula = t.assignment.formula
     
     return trackings
 
@@ -120,7 +133,10 @@ def update_tracking(db: Session, tracking_id: UUID, achieved_value, achieved_tot
 
     tracking = get_tracking(db, tracking_id)
 
-    if tracking.is_closed:
+    if tracking.approval_status == "APROBADO":
+        raise HTTPException(status_code=400, detail="El KPI está aprobado y no puede editarse")
+
+    if tracking.is_closed and tracking.approval_status != "RECHAZADO":
         raise HTTPException(status_code=400, detail="Tracking is closed")
 
     assignment = db.query(IndicatorAssignment).filter(
@@ -158,6 +174,10 @@ def update_tracking(db: Session, tracking_id: UUID, achieved_value, achieved_tot
     tracking.target_met = target_met
 
     tracking.status = "COMPLETED"
+
+    if tracking.approval_status == "RECHAZADO":
+        tracking.approval_status = "PENDIENTE"
+        tracking.rejection_comment = None
 
     db.commit()
     db.refresh(tracking)
@@ -213,6 +233,7 @@ def close_tracking(db: Session, tracking_id: UUID, achieved_value=None, achieved
 
     tracking.is_closed = True
     tracking.status = "CLOSED"
+    tracking.approval_status = "APROBADO"
 
     db.commit()
     db.refresh(tracking)
@@ -278,6 +299,7 @@ def close_assignment_direct(db: Session, assignment_id: UUID, achieved_value=Non
         tracking.status = "COMPLETED"
 
     tracking.is_closed = True
+    tracking.approval_status = "APROBADO"
 
     db.commit()
     db.refresh(tracking)

@@ -7,9 +7,12 @@ from decimal import Decimal
 class MonthData(BaseModel):
     month: int
     achieved_value: Optional[Decimal] = None
+    achieved_total: Optional[Decimal] = None
     achievement_percentage: Optional[Decimal] = None
     status: Optional[str] = None
     is_closed: bool
+    approval_status: Optional[str] = "PENDIENTE"
+    rejection_comment: Optional[str] = None
     tracking_id: Optional[UUID] = None
 
 

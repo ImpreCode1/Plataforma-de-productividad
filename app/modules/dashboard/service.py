@@ -57,6 +57,8 @@ def get_dashboard_by_user(db: Session, user_id: UUID, year: int, month: int = No
                     "achievement_percentage": t.achievement_percentage,
                     "status": t.status,
                     "is_closed": t.is_closed,
+                    "approval_status": t.approval_status or "PENDIENTE",
+                    "rejection_comment": t.rejection_comment,
                     "tracking_id": str(t.id),
                     "action_plans": plans_data,
                     "evidence_count": evidence_count
@@ -74,6 +76,8 @@ def get_dashboard_by_user(db: Session, user_id: UUID, year: int, month: int = No
                 "achievement_percentage": None,
                 "status": "PENDING",
                 "is_closed": False,
+                "approval_status": "PENDIENTE",
+                "rejection_comment": None,
                 "tracking_id": None,
                 "action_plans": [],
                 "evidence_count": 0
