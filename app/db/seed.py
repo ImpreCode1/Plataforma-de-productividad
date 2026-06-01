@@ -30,8 +30,15 @@ def seed_admin_user(db: Session, role_map):
     admin = db.query(User).filter(User.email == ADMIN_EMAIL).first()
 
     if not admin:
-        print("⚠️ Admin no existe aún (se creará cuando importes Excel)")
-        return
+        admin = User(
+            name="Sebastián Ortiz",
+            email=ADMIN_EMAIL,
+            document_number="1000592418",
+            position_name="IT Developer",
+        )
+        db.add(admin)
+        db.flush()
+        print("✅ Admin creado en BD")
 
     # Verificar si ya tiene rol ADMIN
     existing = db.query(UserRole).filter(
@@ -45,7 +52,7 @@ def seed_admin_user(db: Session, role_map):
             role_id=role_map["ADMIN"].id
         ))
         db.commit()
-        print("✅ Admin asignado correctamente")
+        print("✅ Rol ADMIN asignado correctamente")
 
 
 def run_seed(db: Session):

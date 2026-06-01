@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.core.security.dependencies import get_current_user
 from app.db.session import get_db, SessionLocal
-from app.db.seed import seed_roles
+from app.db.seed import run_seed
 
 from app.modules.users.router import router as users_router
 from app.modules.indicator_assignments.router import router as indicators_router
@@ -30,11 +30,11 @@ app.mount("/uploads", StaticFiles(directory="app/uploads"), name="uploads")
 
 
 @app.on_event("startup")
-def run_seed():
+def startup_seed():
     db = SessionLocal()
     try:
-        seed_roles(db)
-        print("✅ Roles seed ejecutado")
+        run_seed(db)
+        print("✅ Seed completo ejecutado")
     finally:
         db.close()
 
