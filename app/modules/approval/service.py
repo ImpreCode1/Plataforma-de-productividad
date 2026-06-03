@@ -43,7 +43,33 @@ def _can_approve(user: User, tracking: IndicatorTracking, db: Session) -> bool:
     return False
 
 
-def submit_assignment(db: Session, assignment_id: UUID, current_user: User) -> IndicatorTracking:
+def _save_action_plan(db: Session, tracking_id: UUID, reason_not_met: str | None, action_plan: str | None, current_user: User):
+    if not action_plan and not reason_not_met:
+        return
+
+    existing = db.query(ActionPlan).filter(
+        ActionPlan.tracking_id == tracking_id
+    ).first()
+
+    if existing:
+        if action_plan is not None:
+            existing.action_plan = action_plan
+        if reason_not_met is not None:
+            existing.reason_not_met = reason_not_met
+    else:
+        plan = ActionPlan(
+            tracking_id=tracking_id,
+            reason_not_met=reason_not_met or "",
+            action_plan=action_plan or "",
+            created_by=current_user.id,
+            created_at=datetime.utcnow(),
+        )
+        db.add(plan)
+
+    db.flush()
+
+
+def submit_assignment(db: Session, assignment_id: UUID, current_user: User, reason_not_met: str | None = None, action_plan: str | None = None) -> IndicatorTracking:
     assignment = _get_assignment_or_404(db, assignment_id)
 
     if not assignment.is_active:
@@ -63,6 +89,8 @@ def submit_assignment(db: Session, assignment_id: UUID, current_user: User) -> I
     if tracking.achieved_value is None:
         raise HTTPException(status_code=400, detail="Debes registrar un valor antes de enviar a revisión")
 
+    _save_action_plan(db, tracking.id, reason_not_met, action_plan, current_user)
+
     tracking.approval_status = "EN_REVISION"
     tracking.submitted_at = datetime.utcnow()
     tracking.submitted_by = current_user.id
@@ -79,7 +107,7 @@ def submit_assignment(db: Session, assignment_id: UUID, current_user: User) -> I
     return tracking
 
 
-def submit_tracking(db: Session, tracking_id: UUID, current_user: User) -> IndicatorTracking:
+def submit_tracking(db: Session, tracking_id: UUID, current_user: User, reason_not_met: str | None = None, action_plan: str | None = None) -> IndicatorTracking:
     tracking = _get_tracking_or_404(db, tracking_id)
 
     if tracking.approval_status == "APROBADO":
@@ -93,6 +121,8 @@ def submit_tracking(db: Session, tracking_id: UUID, current_user: User) -> Indic
 
     if tracking.achieved_value is None:
         raise HTTPException(status_code=400, detail="Debes registrar un valor antes de enviar a revisión")
+
+    _save_action_plan(db, tracking.id, reason_not_met, action_plan, current_user)
 
     tracking.approval_status = "EN_REVISION"
     tracking.submitted_at = datetime.utcnow()

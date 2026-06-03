@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends
 from app.core.security.dependencies import DBSession, CurrentUser, require_roles
 from app.modules.approval import service
 from app.modules.approval.schemas import (
+    TrackingSubmitRequest,
+    AssignmentSubmitRequest,
     TrackingApproveRequest,
     TrackingRejectRequest,
     TrackingApprovalResponse,
@@ -21,10 +23,11 @@ router = APIRouter(
 )
 def submit_tracking(
     tracking_id: UUID,
+    data: TrackingSubmitRequest,
     db: DBSession,
     current_user: CurrentUser,
 ):
-    return service.submit_tracking(db, tracking_id, current_user)
+    return service.submit_tracking(db, tracking_id, current_user, data.reason_not_met, data.action_plan)
 
 
 @router.post(
@@ -33,10 +36,11 @@ def submit_tracking(
 )
 def submit_assignment(
     assignment_id: UUID,
+    data: AssignmentSubmitRequest,
     db: DBSession,
     current_user: CurrentUser,
 ):
-    return service.submit_assignment(db, assignment_id, current_user)
+    return service.submit_assignment(db, assignment_id, current_user, data.reason_not_met, data.action_plan)
 
 
 @router.patch(

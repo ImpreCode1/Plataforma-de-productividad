@@ -6,7 +6,29 @@ from datetime import datetime
 
 
 class TrackingSubmitRequest(BaseModel):
-    pass
+    reason_not_met: Optional[str] = None
+    action_plan: Optional[str] = None
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "reason_not_met": "Falta de recursos",
+                "action_plan": "Solicitar equipo adicional para el próximo mes"
+            }
+        }
+
+
+class AssignmentSubmitRequest(BaseModel):
+    reason_not_met: Optional[str] = None
+    action_plan: Optional[str] = None
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "reason_not_met": "Falta de recursos",
+                "action_plan": "Solicitar equipo adicional para el próximo mes"
+            }
+        }
 
 
 class TrackingApproveRequest(BaseModel):
