@@ -84,8 +84,6 @@ def create_assignment(db: Session, data):
 
     db.add(assignment)
     db.commit()
-
-    db.commit()
     db.refresh(assignment)
 
     return assignment

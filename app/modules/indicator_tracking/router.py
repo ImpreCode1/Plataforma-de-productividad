@@ -104,7 +104,7 @@ def close_tracking(
     db: DBSession,
     current_user: CurrentUser
 ):
-    return service.close_tracking(db, tracking_id, data.achieved_value, data.achieved_total)
+    return service.close_tracking(db, tracking_id, data.achieved_value, data.achieved_total, approved_by=current_user.id)
 
 
 # ------------------------------------------------

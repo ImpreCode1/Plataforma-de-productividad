@@ -6,9 +6,9 @@ from datetime import datetime
 from app.models.tracking import IndicatorTracking
 from app.models.indicator_assignment import IndicatorAssignment
 from app.models.user import User
-from app.models.evidence import Evidence
 from app.models.action_plan import ActionPlan
 from app.modules.notifications import service as notification_service
+from app.modules.evidence.service import _ensure_tracking_for_assignment
 
 
 def _get_tracking_or_404(db: Session, tracking_id: UUID) -> IndicatorTracking:
@@ -43,28 +43,6 @@ def _can_approve(user: User, tracking: IndicatorTracking, db: Session) -> bool:
     return False
 
 
-def _ensure_tracking_for_assignment(db: Session, assignment: IndicatorAssignment) -> IndicatorTracking:
-    tracking = db.query(IndicatorTracking).filter(
-        IndicatorTracking.assignment_id == assignment.id
-    ).first()
-
-    if tracking:
-        return tracking
-
-    tracking = IndicatorTracking(
-        user_id=assignment.user_id,
-        assignment_id=assignment.id,
-        year=assignment.year,
-        month=assignment.month,
-        status="PENDING",
-        is_closed=False,
-        approval_status="PENDIENTE",
-    )
-    db.add(tracking)
-    db.flush()
-    return tracking
-
-
 def submit_assignment(db: Session, assignment_id: UUID, current_user: User) -> IndicatorTracking:
     assignment = _get_assignment_or_404(db, assignment_id)
 
@@ -74,7 +52,7 @@ def submit_assignment(db: Session, assignment_id: UUID, current_user: User) -> I
     if assignment.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Solo el colaborador asignado puede enviar este KPI")
 
-    tracking = _ensure_tracking_for_assignment(db, assignment)
+    tracking = _ensure_tracking_for_assignment(db, assignment_id)
 
     if tracking.approval_status == "APROBADO":
         raise HTTPException(status_code=400, detail="El KPI ya está aprobado y no puede modificarse")

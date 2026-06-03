@@ -1,11 +1,13 @@
 from sqlalchemy.orm import Session
 from uuid import UUID
 from fastapi import HTTPException
+from datetime import datetime
 
 from app.models.tracking import IndicatorTracking
 from app.models.indicator_assignment import IndicatorAssignment
 from app.models.action_plan import ActionPlan
 from app.models.user import User
+from app.modules.common.kpi_calculator import calculate_kpi_results
 
 
 # ------------------------------------------------
@@ -146,33 +148,13 @@ def update_tracking(db: Session, tracking_id: UUID, achieved_value, achieved_tot
     if not assignment:
         raise HTTPException(status_code=404, detail="Assignment not found")
 
-    # -----------------------------
-    # CÁLCULOS 🔥
-    # -----------------------------
-
     tracking.achieved_value = achieved_value
     tracking.achieved_total = achieved_total
 
-    if achieved_total is not None and achieved_total > 0:
-        achievement_percentage = (achieved_value / achieved_total) * 100
-    elif assignment.target_value is not None and assignment.target_value > 0:
-        achievement_percentage = (achieved_value / assignment.target_value) * 100
-    else:
-        achievement_percentage = 0
-
-    weighted_score = (achievement_percentage * (assignment.weight or 0)) / 100
-
-    tracking.achievement_percentage = round(achievement_percentage, 2)
-    tracking.weighted_score = round(weighted_score, 2)
-
-    target_met = False
-    if achieved_total is not None and achieved_total > 0:
-        target_met = achieved_value >= achieved_total
-    elif assignment.target_value is not None:
-        target_met = achieved_value >= assignment.target_value
-    
-    tracking.target_met = target_met
-
+    results = calculate_kpi_results(achieved_value, achieved_total, assignment.target_value, assignment.weight)
+    tracking.achievement_percentage = results["achievement_percentage"]
+    tracking.weighted_score = results["weighted_score"]
+    tracking.target_met = results["target_met"]
     tracking.status = "COMPLETED"
 
     if tracking.approval_status == "RECHAZADO":
@@ -189,43 +171,27 @@ def update_tracking(db: Session, tracking_id: UUID, achieved_value, achieved_tot
 # CLOSE TRACKING (LEADER)
 # ------------------------------------------------
 
-def close_tracking(db: Session, tracking_id: UUID, achieved_value=None, achieved_total=None):
+def close_tracking(db: Session, tracking_id: UUID, achieved_value=None, achieved_total=None, approved_by: UUID = None):
 
     tracking = get_tracking(db, tracking_id)
 
     if tracking.is_closed:
         raise HTTPException(status_code=400, detail="Already closed")
 
-    # Allow leader to update value when closing
+    assignment = db.query(IndicatorAssignment).filter(
+        IndicatorAssignment.id == tracking.assignment_id
+    ).first()
+
     if achieved_value is not None:
         tracking.achieved_value = achieved_value
         tracking.achieved_total = achieved_total
-        
-        assignment = db.query(IndicatorAssignment).filter(
-            IndicatorAssignment.id == tracking.assignment_id
-        ).first()
 
-        # Calcular: (logrado / total) * 100
-        if achieved_total is not None and achieved_total > 0:
-            achievement_percentage = (achieved_value / achieved_total) * 100
-        elif assignment and assignment.target_value is not None and assignment.target_value > 0:
-            achievement_percentage = (achieved_value / assignment.target_value) * 100
-        else:
-            achievement_percentage = 0
-
-        weighted_score = (achievement_percentage * (assignment.weight if assignment else 0)) / 100
-
-        tracking.achievement_percentage = round(achievement_percentage, 2)
-        tracking.weighted_score = round(weighted_score, 2)
-        
-        # Comparar achievement_percentage vs target_value (meta del indicador)
-        target_met = False
-        if assignment and assignment.target_value is not None:
-            target_met = achievement_percentage >= assignment.target_value
-        elif achieved_total is not None and achieved_total > 0:
-            target_met = (achieved_value / achieved_total * 100) >= 100
-        
-        tracking.target_met = target_met
+        target_value = assignment.target_value if assignment else None
+        weight = assignment.weight if assignment else None
+        results = calculate_kpi_results(achieved_value, achieved_total, target_value, weight)
+        tracking.achievement_percentage = results["achievement_percentage"]
+        tracking.weighted_score = results["weighted_score"]
+        tracking.target_met = results["target_met"]
         tracking.status = "COMPLETED"
 
     elif tracking.achieved_value is None:
@@ -234,6 +200,10 @@ def close_tracking(db: Session, tracking_id: UUID, achieved_value=None, achieved
     tracking.is_closed = True
     tracking.status = "CLOSED"
     tracking.approval_status = "APROBADO"
+
+    if approved_by:
+        tracking.approved_by = approved_by
+        tracking.approved_at = datetime.utcnow()
 
     db.commit()
     db.refresh(tracking)
@@ -278,28 +248,19 @@ def close_assignment_direct(db: Session, assignment_id: UUID, achieved_value=Non
     if achieved_value is not None:
         tracking.achieved_value = achieved_value
         tracking.achieved_total = achieved_total
-        
-        if achieved_total is not None and achieved_total > 0:
-            achievement_percentage = (achieved_value / achieved_total) * 100
-        elif assignment.target_value is not None and assignment.target_value > 0:
-            achievement_percentage = (achieved_value / assignment.target_value) * 100
-        else:
-            achievement_percentage = 0
 
-        weighted_score = (achievement_percentage * (assignment.weight or 0)) / 100
-
-        tracking.achievement_percentage = round(achievement_percentage, 2)
-        tracking.weighted_score = round(weighted_score, 2)
-        
-        target_met = False
-        if assignment.target_value is not None:
-            target_met = achievement_percentage >= assignment.target_value
-        
-        tracking.target_met = target_met
+        results = calculate_kpi_results(achieved_value, achieved_total, assignment.target_value, assignment.weight)
+        tracking.achievement_percentage = results["achievement_percentage"]
+        tracking.weighted_score = results["weighted_score"]
+        tracking.target_met = results["target_met"]
         tracking.status = "COMPLETED"
 
     tracking.is_closed = True
     tracking.approval_status = "APROBADO"
+
+    if user_id:
+        tracking.approved_by = user_id
+        tracking.approved_at = datetime.utcnow()
 
     db.commit()
     db.refresh(tracking)
