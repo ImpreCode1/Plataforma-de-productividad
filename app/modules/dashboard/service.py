@@ -197,6 +197,7 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
 
     # 3. BATCH: action plans
     plans_by_tracking = defaultdict(int)
+    plans_detail_by_tracking = defaultdict(list)
     if tracking_ids:
         plan_counts = db.query(
             ActionPlan.tracking_id, func.count(ActionPlan.id)
@@ -205,6 +206,17 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
         ).group_by(ActionPlan.tracking_id).all()
         for tid, cnt in plan_counts:
             plans_by_tracking[tid] = cnt
+
+        plans = db.query(ActionPlan).filter(
+            ActionPlan.tracking_id.in_(tracking_ids)
+        ).all()
+        for p in plans:
+            plans_detail_by_tracking[p.tracking_id].append({
+                "id": str(p.id),
+                "reason_not_met": p.reason_not_met,
+                "action_plan": p.action_plan,
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+            })
 
     # 4. BATCH: evidences linked to trackings
     ev_by_tracking = defaultdict(int)
@@ -352,6 +364,7 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
 
                     month_data = {
                         "month": t.month,
+                        "tracking_id": str(t.id),
                         "is_closed": t.is_closed,
                         "achieved_value": float(t.achieved_value) if t.achieved_value else None,
                         "achieved_total": float(t.achieved_total) if t.achieved_total else None,
@@ -362,6 +375,7 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
                         "evidence_count": evidence_count,
                         "has_action_plan": plans_count > 0,
                         "has_evidence": evidence_count > 0,
+                        "action_plans": plans_detail_by_tracking.get(t.id, []),
                     }
 
                     if assignment.indicator_name not in indicators_by_name:
@@ -378,6 +392,7 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
 
                 month_data = {
                     "month": assignment.month,
+                    "tracking_id": None,
                     "is_closed": False,
                     "achieved_value": None,
                     "achieved_total": None,
@@ -388,6 +403,7 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
                     "evidence_count": 0,
                     "has_action_plan": False,
                     "has_evidence": False,
+                    "action_plans": [],
                 }
 
                 if assignment.indicator_name not in indicators_by_name:
