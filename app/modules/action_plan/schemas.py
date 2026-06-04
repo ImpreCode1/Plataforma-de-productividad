@@ -1,5 +1,6 @@
 from uuid import UUID
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import List, Optional
 from datetime import datetime
 
 
@@ -23,3 +24,9 @@ class ActionPlanResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ImportActionPlansResponse(BaseModel):
+    created: int = 0
+    updated: int = 0
+    errors: List[dict] = Field(default_factory=list)

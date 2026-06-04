@@ -1,3 +1,6 @@
+import unicodedata
+import re
+import pandas as pd
 from sqlalchemy.orm import Session
 from uuid import UUID
 from fastapi import HTTPException
@@ -5,6 +8,7 @@ from fastapi import HTTPException
 from app.models.action_plan import ActionPlan
 from app.models.tracking import IndicatorTracking
 from app.models.user import User
+from app.models.indicator_assignment import IndicatorAssignment
 
 
 # ------------------------------------------------
@@ -180,3 +184,199 @@ def update_action_plan(db: Session, action_plan_id: UUID, data):
     db.refresh(action_plan)
 
     return action_plan
+
+
+# ------------------------------------------------
+# NORMALIZATION HELPERS
+# ------------------------------------------------
+
+def normalize_name(name):
+    if not name:
+        return name
+    name = str(name)
+    name = unicodedata.normalize('NFD', name)
+    name = ''.join(c for c in name if not unicodedata.combining(c))
+    return re.sub(r"\s+", " ", name.strip()).lower()
+
+
+def names_match(name1, name2, threshold=0.6):
+    if not name1 or not name2:
+        return False
+    words1 = set(normalize_name(name1).lower().split())
+    words2 = set(normalize_name(name2).lower().split())
+    if not words1 or not words2:
+        return False
+    intersection = words1 & words2
+    min_words = min(len(words1), len(words2))
+    if min_words == 0:
+        return False
+    return len(intersection) / min_words >= threshold
+
+
+def find_user_by_fuzzy_name(users_dict, target_name):
+    if not target_name:
+        return None
+    target = normalize_name(target_name).lower()
+    for key, user in users_dict.items():
+        if isinstance(key, str) and names_match(key.lower(), target):
+            return user
+    return None
+
+
+# ------------------------------------------------
+# FUZZY INDICATOR MATCHER
+# ------------------------------------------------
+
+def find_indicator_by_fuzzy_name(assignments, target_name, threshold=0.5):
+    if not target_name or not assignments:
+        return None
+    target = normalize_name(target_name)
+    target_words = set(target.split())
+
+    best = None
+    best_score = 0
+
+    for a in assignments:
+        db_name = normalize_name(a.indicator_name)
+        db_words = set(db_name.split())
+        if not db_words:
+            continue
+
+        intersection = target_words & db_words
+        score = len(intersection) / max(len(target_words), len(db_words), 1)
+
+        if target in db_name or db_name in target:
+            score = max(score, 0.85)
+
+        if score > best_score:
+            best_score = score
+            best = a
+
+    return best if best_score >= threshold else None
+
+
+# ------------------------------------------------
+# IMPORT ACTION PLANS FROM EXCEL
+# ------------------------------------------------
+
+def import_action_plans_from_excel(db: Session, file, year: int, month: int):
+    df = pd.read_excel(file, header=None, skiprows=3, usecols=[0, 1, 2, 3])
+    df.columns = ["Responsable", "Nombre del indicador", "reason_not_met", "action_plan"]
+
+    created = 0
+    updated = 0
+    errors = []
+
+    users_by_name = {}
+    all_users = db.query(User).all()
+    for user in all_users:
+        normalized = normalize_name(user.name)
+        users_by_name[normalized] = user
+
+    for idx, row in df.iterrows():
+        responsible_name = str(row.get("Responsable", "")).strip() if pd.notna(row.get("Responsable")) else ""
+        indicator_name = str(row.get("Nombre del indicador", "")).strip().rstrip('.') if pd.notna(row.get("Nombre del indicador")) else ""
+        reason = str(row.get("reason_not_met", "")).strip() if pd.notna(row.get("reason_not_met")) else ""
+        action_plan = str(row.get("action_plan", "")).strip() if pd.notna(row.get("action_plan")) else ""
+
+        if not indicator_name:
+            errors.append({
+                "fila": idx + 3,
+                "responsable": responsible_name,
+                "indicador": "",
+                "motivo": "Nombre del indicador vacío"
+            })
+            continue
+
+        if not action_plan:
+            errors.append({
+                "fila": idx + 3,
+                "responsable": responsible_name,
+                "indicador": indicator_name,
+                "motivo": "Plan de acción vacío"
+            })
+            continue
+
+        user = users_by_name.get(normalize_name(responsible_name))
+        if not user:
+            user = find_user_by_fuzzy_name(users_by_name, responsible_name)
+
+        if not user:
+            errors.append({
+                "fila": idx + 3,
+                "responsable": responsible_name,
+                "indicador": indicator_name,
+                "motivo": "Usuario no encontrado en la base de datos"
+            })
+            continue
+
+        assignment = db.query(IndicatorAssignment).filter(
+            IndicatorAssignment.user_id == user.id,
+            IndicatorAssignment.year == year,
+            IndicatorAssignment.month == month,
+            IndicatorAssignment.indicator_name == indicator_name,
+            IndicatorAssignment.is_active == True
+        ).first()
+
+        if not assignment:
+            user_assignments = db.query(IndicatorAssignment).filter(
+                IndicatorAssignment.user_id == user.id,
+                IndicatorAssignment.year == year,
+                IndicatorAssignment.month == month,
+                IndicatorAssignment.is_active == True
+            ).all()
+            assignment = find_indicator_by_fuzzy_name(user_assignments, indicator_name)
+
+        if not assignment:
+            errors.append({
+                "fila": idx + 3,
+                "responsable": responsible_name,
+                "indicador": indicator_name,
+                "motivo": f"No se encontró el indicador asignado para {year}/{month}"
+            })
+            continue
+
+        tracking = db.query(IndicatorTracking).filter(
+            IndicatorTracking.assignment_id == assignment.id,
+            IndicatorTracking.year == year,
+            IndicatorTracking.month == month,
+        ).first()
+
+        if not tracking:
+            tracking = IndicatorTracking(
+                user_id=user.id,
+                assignment_id=assignment.id,
+                year=year,
+                month=month,
+                status="CLOSED",
+                is_closed=True,
+                approval_status="APROBADO",
+            )
+            db.add(tracking)
+            db.flush()
+
+        existing_plan = db.query(ActionPlan).filter(
+            ActionPlan.tracking_id == tracking.id
+        ).first()
+
+        if existing_plan:
+            existing_plan.reason_not_met = reason if reason else None
+            existing_plan.action_plan = action_plan
+            updated += 1
+        else:
+            plan = ActionPlan(
+                tracking_id=tracking.id,
+                reason_not_met=reason if reason else None,
+                action_plan=action_plan,
+                created_by=user.id,
+            )
+            db.add(plan)
+            created += 1
+
+    db.commit()
+
+    return {
+        "created": created,
+        "updated": updated,
+        "errors": errors,
+    }

@@ -1,13 +1,14 @@
 from uuid import UUID
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, UploadFile, File, Form
 from pydantic import BaseModel
 
-from app.core.security.dependencies import DBSession, CurrentUser
+from app.core.security.dependencies import DBSession, CurrentUser, require_roles
 from app.modules.action_plan import service
 from app.modules.action_plan.schemas import (
     ActionPlanCreate,
     ActionPlanResponse,
-    ActionPlanUpdate
+    ActionPlanUpdate,
+    ImportActionPlansResponse,
 )
 
 router = APIRouter(
@@ -46,6 +47,25 @@ def list_my_action_plans(
 ):
     data = service.list_my_action_plans(db, current_user.id, year)
     return {"action_plans": data}
+
+
+# ------------------------------------------------
+# IMPORT ACTION PLANS FROM EXCEL
+# ------------------------------------------------
+
+@router.post(
+    "/import-excel",
+    response_model=ImportActionPlansResponse,
+    dependencies=[Depends(require_roles("ADMIN"))]
+)
+def import_action_plans(
+    db: DBSession,
+    current_user: CurrentUser,
+    year: int = Form(...),
+    month: int = Form(...),
+    file: UploadFile = File(...)
+):
+    return service.import_action_plans_from_excel(db, file.file, year, month)
 
 
 # ------------------------------------------------
