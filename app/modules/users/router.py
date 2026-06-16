@@ -168,3 +168,20 @@ def import_excel(
     file: UploadFile = File(...)
 ):
     return service.import_users_from_excel(db, file.file)
+
+# ------------------------------------------------
+# IMPORT ANNUAL ACTION PLANS FROM EXCEL (todos los meses)
+# ------------------------------------------------
+
+@router.post(
+    "/import-excel-anual",
+    response_model=ImportActionPlansResponse,
+    dependencies=[Depends(require_roles("ADMIN"))]
+)
+def import_annual_action_plans(
+    db: DBSession,
+    current_user: CurrentUser,
+    year: int = Form(...),
+    file: UploadFile = File(...)
+):
+    return service.import_annual_action_plans_from_excel(db, file.file, year)

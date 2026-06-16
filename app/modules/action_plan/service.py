@@ -380,3 +380,146 @@ def import_action_plans_from_excel(db: Session, file, year: int, month: int):
         "updated": updated,
         "errors": errors,
     }
+
+# ------------------------------------------------
+# IMPORT ANNUAL ACTION PLANS FROM EXCEL (todos los meses en una hoja)
+# ------------------------------------------------
+
+MONTH_COLUMNS = {
+    "Enero":      (2,  3,  1),
+    "Febrero":    (4,  5,  2),
+    "Marzo":      (6,  7,  3),
+    "Abril":      (8,  9,  4),
+    "Mayo":       (10, 11, 5),
+    "Junio":      (12, 13, 6),
+    "Julio":      (14, 15, 7),
+    "Agosto":     (16, 17, 8),
+    "Septiembre": (18, 19, 9),
+    "Octubre":    (20, 21, 10),
+    "Noviembre":  (22, 23, 11),
+    "Diciembre":  (24, 25, 12),
+}
+
+def import_annual_action_plans_from_excel(db: Session, file, year: int):
+    df = pd.read_excel(file, header=None, skiprows=3)
+
+    created = 0
+    updated = 0
+    errors = []
+
+    # Cargar todos los usuarios una sola vez
+    users_by_name = {}
+    for user in db.query(User).all():
+        normalized = normalize_name(user.name)
+        users_by_name[normalized] = user
+
+    for idx, row in df.iterrows():
+        responsible_name = str(row.iloc[0]).strip() if pd.notna(row.iloc[0]) else ""
+        indicator_name = str(row.iloc[1]).strip().rstrip('.') if pd.notna(row.iloc[1]) else ""
+
+        if not responsible_name or not indicator_name:
+            continue
+
+        # Resolver usuario una vez por fila
+        user = users_by_name.get(normalize_name(responsible_name))
+        if not user:
+            user = find_user_by_fuzzy_name(users_by_name, responsible_name)
+
+        if not user:
+            errors.append({
+                "fila": idx + 4,
+                "responsable": responsible_name,
+                "indicador": indicator_name,
+                "mes": "N/A",
+                "motivo": "Usuario no encontrado en la base de datos"
+            })
+            continue
+
+        # Iterar cada mes
+        for month_name, (reason_col, plan_col, month_num) in MONTH_COLUMNS.items():
+            reason = ""
+            action_plan = ""
+
+            if reason_col < len(row) and pd.notna(row.iloc[reason_col]):
+                reason = str(row.iloc[reason_col]).strip()
+            if plan_col < len(row) and pd.notna(row.iloc[plan_col]):
+                action_plan = str(row.iloc[plan_col]).strip()
+
+            # Si ambas celdas están vacías, saltar este mes
+            if not reason and not action_plan:
+                continue
+
+            # Buscar assignment para este usuario/mes/año
+            assignment = db.query(IndicatorAssignment).filter(
+                IndicatorAssignment.user_id == user.id,
+                IndicatorAssignment.year == year,
+                IndicatorAssignment.month == month_num,
+                IndicatorAssignment.indicator_name == indicator_name,
+                IndicatorAssignment.is_active == True
+            ).first()
+
+            if not assignment:
+                user_assignments = db.query(IndicatorAssignment).filter(
+                    IndicatorAssignment.user_id == user.id,
+                    IndicatorAssignment.year == year,
+                    IndicatorAssignment.month == month_num,
+                    IndicatorAssignment.is_active == True
+                ).all()
+                assignment = find_indicator_by_fuzzy_name(user_assignments, indicator_name)
+
+            if not assignment:
+                errors.append({
+                    "fila": idx + 4,
+                    "responsable": responsible_name,
+                    "indicador": indicator_name,
+                    "mes": month_name,
+                    "motivo": f"Indicador no encontrado para {year}/{month_num}"
+                })
+                continue
+
+            # Buscar o crear tracking
+            tracking = db.query(IndicatorTracking).filter(
+                IndicatorTracking.assignment_id == assignment.id,
+                IndicatorTracking.year == year,
+                IndicatorTracking.month == month_num,
+            ).first()
+
+            if not tracking:
+                tracking = IndicatorTracking(
+                    user_id=user.id,
+                    assignment_id=assignment.id,
+                    year=year,
+                    month=month_num,
+                    status="CLOSED",
+                    is_closed=True,
+                    approval_status="APROBADO",
+                )
+                db.add(tracking)
+                db.flush()
+
+            # Insertar o actualizar plan de acción
+            existing_plan = db.query(ActionPlan).filter(
+                ActionPlan.tracking_id == tracking.id
+            ).first()
+
+            if existing_plan:
+                existing_plan.reason_not_met = reason if reason else None
+                existing_plan.action_plan = action_plan if action_plan else existing_plan.action_plan
+                updated += 1
+            else:
+                plan = ActionPlan(
+                    tracking_id=tracking.id,
+                    reason_not_met=reason if reason else None,
+                    action_plan=action_plan,
+                    created_by=user.id,
+                )
+                db.add(plan)
+                created += 1
+
+    db.commit()
+
+    return {
+        "created": created,
+        "updated": updated,
+        "errors": errors,
+    }
