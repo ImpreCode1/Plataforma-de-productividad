@@ -1,4 +1,4 @@
-from uuid import UUID
+﻿from uuid import UUID
 from fastapi import APIRouter, Depends, UploadFile, File, Form
 from pydantic import BaseModel
 
@@ -20,91 +20,39 @@ class ActionPlanListResponse(BaseModel):
     action_plans: list
 
 
-# ------------------------------------------------
-# LIST ALL (Leader's Team)
-# ------------------------------------------------
-
 @router.get("/team/{leader_id}/{year}", response_model=ActionPlanListResponse)
-def list_team_action_plans(
-    leader_id: UUID,
-    year: int,
-    db: DBSession,
-    current_user: CurrentUser
-):
+def list_team_action_plans(leader_id: UUID, year: int, db: DBSession, current_user: CurrentUser):
     data = service.list_team_action_plans(db, leader_id, year)
     return {"action_plans": data}
 
 
-# ------------------------------------------------
-# LIST MY ACTION PLANS (Employee)
-# ------------------------------------------------
-
 @router.get("/me/{year}", response_model=ActionPlanListResponse)
-def list_my_action_plans(
-    year: int,
-    db: DBSession,
-    current_user: CurrentUser
-):
+def list_my_action_plans(year: int, db: DBSession, current_user: CurrentUser):
     data = service.list_my_action_plans(db, current_user.id, year)
     return {"action_plans": data}
 
 
-# ------------------------------------------------
-# IMPORT ACTION PLANS FROM EXCEL
-# ------------------------------------------------
-
-@router.post(
-    "/import-excel",
-    response_model=ImportActionPlansResponse,
-    dependencies=[Depends(require_roles("ADMIN"))]
-)
-def import_action_plans(
-    db: DBSession,
-    current_user: CurrentUser,
-    year: int = Form(...),
-    month: int = Form(...),
-    file: UploadFile = File(...)
-):
+@router.post("/import-excel", response_model=ImportActionPlansResponse, dependencies=[Depends(require_roles("ADMIN"))])
+def import_action_plans(db: DBSession, current_user: CurrentUser, year: int = Form(...), month: int = Form(...), file: UploadFile = File(...)):
     return service.import_action_plans_from_excel(db, file.file, year, month)
 
 
-# ------------------------------------------------
-# CREATE
-# ------------------------------------------------
+@router.post("/import-excel-anual", response_model=ImportActionPlansResponse, dependencies=[Depends(require_roles("ADMIN"))])
+def import_annual_action_plans(db: DBSession, current_user: CurrentUser, year: int = Form(...), file: UploadFile = File(...)):
+    return service.import_annual_action_plans_from_excel(db, file.file, year)
+
 
 @router.post("/{tracking_id}", response_model=ActionPlanResponse)
-def create_action_plan(
-    tracking_id: UUID,
-    data: ActionPlanCreate,
-    db: DBSession,
-    current_user: CurrentUser
-):
+def create_action_plan(tracking_id: UUID, data: ActionPlanCreate, db: DBSession, current_user: CurrentUser):
     return service.create_action_plan(db, tracking_id, data, current_user.id)
 
 
-# ------------------------------------------------
-# LIST
-# ------------------------------------------------
-
 @router.get("/{tracking_id}")
-def list_action_plans(
-    tracking_id: UUID,
-    db: DBSession,
-    current_user: CurrentUser
-):
+def list_action_plans(tracking_id: UUID, db: DBSession, current_user: CurrentUser):
     data = service.list_action_plans(db, tracking_id)
     return {"action_plans": data}
 
 
-# ------------------------------------------------
-# UPDATE
-# ------------------------------------------------
-
 @router.patch("/{action_plan_id}", response_model=ActionPlanResponse)
-def update_action_plan(
-    action_plan_id: UUID,
-    data: ActionPlanUpdate,
-    db: DBSession,
-    current_user: CurrentUser
-):
+def update_action_plan(action_plan_id: UUID, data: ActionPlanUpdate, db: DBSession, current_user: CurrentUser):
     return service.update_action_plan(db, action_plan_id, data)
