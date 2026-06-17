@@ -6,4 +6,5 @@ from .tracking import IndicatorTracking
 from .evidence import Evidence
 from .action_plan import ActionPlan
 from .approval_config import ApprovalConfig
+from .position_group import PositionGroup
 

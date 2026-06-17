@@ -19,6 +19,7 @@ from app.modules.team.router import router as team_router
 from app.modules.notifications.router import router as notifications_router
 from app.modules.approval.router import router as approval_router
 from app.modules.special_mode.router import router as special_mode_router
+from app.modules.position_groups.router import router as position_groups_router
 
 
 app = FastAPI(
@@ -64,6 +65,7 @@ app.include_router(roles_router)
 app.include_router(notifications_router, dependencies=[Depends(get_current_user)])
 app.include_router(approval_router, dependencies=[Depends(get_current_user)])
 app.include_router(special_mode_router, dependencies=[Depends(get_current_user)])
+app.include_router(position_groups_router, dependencies=[Depends(get_current_user)])
 
 
 @app.get("/")
