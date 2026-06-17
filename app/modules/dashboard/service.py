@@ -139,7 +139,7 @@ def get_team_dashboard(db: Session, leader_id: UUID, year: int, month: int = Non
 # GLOBAL DASHBOARD (ADMIN) - All users overview
 # ------------------------------------------------
 
-def get_global_dashboard(db: Session, year: int, month: int = None, area: str = None):
+def get_global_dashboard(db: Session, year: int, month: int = None, area: str = None, search: str = None):
     from app.modules.users.service import normalize_area
     from collections import defaultdict
 
@@ -152,6 +152,22 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
                 u for u in all_users
                 if normalize_area(u.area) == normalized_area
             ]
+
+    if search:
+        search_lower = search.lower().strip()
+        leader_name_map = {u.id: u.name for u in all_users}
+
+        def matches_search(u):
+            if search_lower in (u.name or "").lower():
+                return True
+            if search_lower in (u.position_name or "").lower():
+                return True
+            leader_name = leader_name_map.get(u.leader_id, "") if u.leader_id else ""
+            if search_lower in (leader_name or "").lower():
+                return True
+            return False
+
+        all_users = [u for u in all_users if matches_search(u)]
 
     if not all_users:
         return empty_global_dashboard(year, month)

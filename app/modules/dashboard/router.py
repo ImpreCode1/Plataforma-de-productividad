@@ -76,10 +76,11 @@ def get_global_dashboard(
     year: int = Query(default=...),
     month: Optional[int] = Query(default=None),
     area: Optional[str] = Query(default=None),
+    search: Optional[str] = Query(default=None),
     db: DBSession = DBSession,
     current_user: CurrentUser = CurrentUser
 ):
-    return service.get_global_dashboard(db, year, month, area)
+    return service.get_global_dashboard(db, year, month, area, search)
 
 
 # ------------------------------------------------
