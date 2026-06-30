@@ -100,11 +100,12 @@ def get_global_dashboard(
     response_model=list[str]
 )
 def get_direcciones(
+    area: Optional[str] = Query(default=None),
     db: DBSession = DBSession,
     current_user: CurrentUser = CurrentUser
 ):
     from app.modules.users.service import get_unique_direcciones
-    return get_unique_direcciones(db)
+    return get_unique_direcciones(db, area=area)
 
 
 @router.get(
@@ -112,13 +113,13 @@ def get_direcciones(
     response_model=list[str]
 )
 def get_responsables(
+    area: Optional[str] = Query(default=None),
+    direccion: Optional[str] = Query(default=None),
     db: DBSession = DBSession,
     current_user: CurrentUser = CurrentUser
 ):
-    responsables = db.query(User.name).filter(
-        User.is_active == True
-    ).distinct().order_by(User.name).all()
-    return [r[0] for r in responsables]
+    from app.modules.users.service import get_unique_responsables
+    return get_unique_responsables(db, area=area, direccion=direccion)
 
 
 # ------------------------------------------------
