@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 
 from app.core.security.dependencies import DBSession, CurrentUser, require_roles
+from app.models.user import User
 from app.modules.dashboard import service
 from app.modules.dashboard.schemas import DashboardResponse, TeamDashboardResponse
 
@@ -75,12 +76,49 @@ def get_team_dashboard(
 def get_global_dashboard(
     year: int = Query(default=...),
     month: Optional[int] = Query(default=None),
+    quarter: Optional[int] = Query(default=None, ge=1, le=4),
     area: Optional[str] = Query(default=None),
+    direccion: Optional[str] = Query(default=None),
+    responsable: Optional[str] = Query(default=None),
+    cumplimiento: Optional[str] = Query(default=None),
     search: Optional[str] = Query(default=None),
     db: DBSession = DBSession,
     current_user: CurrentUser = CurrentUser
 ):
-    return service.get_global_dashboard(db, year, month, area, search)
+    return service.get_global_dashboard(
+        db, year, month, quarter, area, direccion,
+        responsable, cumplimiento, search
+    )
+
+
+# ------------------------------------------------
+# FILTER OPTIONS
+# ------------------------------------------------
+
+@router.get(
+    "/filters/direcciones",
+    response_model=list[str]
+)
+def get_direcciones(
+    db: DBSession = DBSession,
+    current_user: CurrentUser = CurrentUser
+):
+    from app.modules.users.service import get_unique_direcciones
+    return get_unique_direcciones(db)
+
+
+@router.get(
+    "/filters/responsables",
+    response_model=list[str]
+)
+def get_responsables(
+    db: DBSession = DBSession,
+    current_user: CurrentUser = CurrentUser
+):
+    responsables = db.query(User.name).filter(
+        User.is_active == True
+    ).distinct().order_by(User.name).all()
+    return [r[0] for r in responsables]
 
 
 # ------------------------------------------------

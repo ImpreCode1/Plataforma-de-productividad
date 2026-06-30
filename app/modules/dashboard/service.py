@@ -139,7 +139,7 @@ def get_team_dashboard(db: Session, leader_id: UUID, year: int, month: int = Non
 # GLOBAL DASHBOARD (ADMIN) - All users overview
 # ------------------------------------------------
 
-def get_global_dashboard(db: Session, year: int, month: int = None, area: str = None, search: str = None):
+def get_global_dashboard(db: Session, year: int, month: int = None, quarter: int = None, area: str = None, direccion: str = None, responsable: str = None, cumplimiento: str = None, search: str = None):
     from app.modules.users.service import normalize_area
     from collections import defaultdict
 
@@ -152,6 +152,18 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
                 u for u in all_users
                 if normalize_area(u.area) == normalized_area
             ]
+
+    if direccion:
+        from app.modules.users.service import normalize_direccion
+        normalized_direccion = normalize_direccion(direccion)
+        if normalized_direccion:
+            all_users = [
+                u for u in all_users
+                if normalize_direccion(u.direccion) == normalized_direccion
+            ]
+
+    if responsable:
+        all_users = [u for u in all_users if u.name == responsable]
 
     if search:
         search_lower = search.lower().strip()
@@ -172,7 +184,13 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
     if not all_users:
         return empty_global_dashboard(year, month)
 
-    filter_month = month
+    filter_month = None
+    if month:
+        filter_month = [month]
+    elif quarter:
+        quarter_map = {1: [1, 2, 3], 2: [4, 5, 6], 3: [7, 8, 9], 4: [10, 11, 12]}
+        filter_month = quarter_map.get(quarter)
+
     user_ids = [u.id for u in all_users]
     user_map = {u.id: u for u in all_users}
 
@@ -202,7 +220,7 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
         IndicatorTracking.year == year
     )
     if filter_month:
-        tracking_query = tracking_query.filter(IndicatorTracking.month == filter_month)
+        tracking_query = tracking_query.filter(IndicatorTracking.month.in_(filter_month))
     all_trackings = tracking_query.all()
 
     trackings_by_user = defaultdict(list)
@@ -254,7 +272,7 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
         Evidence.tracking_id == None
     )
     if filter_month:
-        ev_without_q = ev_without_q.filter(Evidence.month == filter_month)
+        ev_without_q = ev_without_q.filter(Evidence.month.in_(filter_month))
     ev_without_by_user = defaultdict(int, ev_without_q.group_by(Evidence.user_id).all())
 
     # 6. BATCH: leader names
@@ -294,7 +312,7 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
         Evidence.year == year,
     )
     if filter_month:
-        ev_detail_q = ev_detail_q.filter(Evidence.month == filter_month)
+        ev_detail_q = ev_detail_q.filter(Evidence.month.in_(filter_month))
     ev_detail_counts = ev_detail_q.group_by(
         Evidence.tracking_id, Evidence.user_id, Evidence.year, Evidence.month
     ).all()
@@ -313,13 +331,19 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
 
         raw_assignments = assigments_by_user.get(uid, [])
         if filter_month:
-            assignments = [a for a in raw_assignments if a.month == filter_month]
+            assignments = [a for a in raw_assignments if a.month in filter_month]
         else:
             assignments = raw_assignments
         user_indicators = len(assignments)
         total_indicators += user_indicators
 
         trackings = trackings_by_user.get(uid, [])
+
+        if cumplimiento:
+            if cumplimiento == "cumplio":
+                trackings = [t for t in trackings if t.target_met == True]
+            elif cumplimiento == "no_cumplio":
+                trackings = [t for t in trackings if t.target_met == False]
         tracked_count = len([t for t in trackings if t.status in ["COMPLETED", "CLOSED"]])
         closed_count = len([t for t in trackings if t.is_closed])
         total_tracked += tracked_count
@@ -372,7 +396,7 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
 
             if trackings_ind:
                 for t in trackings_ind:
-                    if filter_month and t.month != filter_month:
+                    if filter_month and t.month not in filter_month:
                         continue
 
                     plans_count = plans_by_tracking.get(t.id, 0)
@@ -403,7 +427,7 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
                         }
                     indicators_by_name[assignment.indicator_name]["months"].append(month_data)
             else:
-                if filter_month and assignment.month != filter_month:
+                if filter_month and assignment.month not in filter_month:
                     continue
 
                 month_data = {
@@ -433,6 +457,11 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
 
         indicators_detail = list(indicators_by_name.values())
 
+        indicators_count_filtered = len(indicators_detail) if cumplimiento else None
+
+        if cumplimiento and not indicators_detail:
+            continue
+
         team_summary.append({
             "user_id": str(uid),
             "name": user.name,
@@ -440,6 +469,7 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
             "position_name": user.position_name,
             "leader_name": leader_name,
             "indicators_count": user_indicators,
+            "indicators_count_filtered": indicators_count_filtered,
             "tracked_months": tracked_count,
             "closed_months": closed_count,
             "score": round(user_score, 2),
@@ -461,6 +491,7 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
                 "leader_name": leader,
                 "members": [],
                 "total_indicators": 0,
+                "total_indicators_filtered": 0,
                 "total_closed": 0,
                 "total_plans": 0,
                 "total_evidence": 0,
@@ -468,6 +499,8 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
             }
         teams_data[leader]["members"].append(user_entry)
         teams_data[leader]["total_indicators"] += user_entry["indicators_count"]
+        if user_entry.get("indicators_count_filtered") is not None:
+            teams_data[leader]["total_indicators_filtered"] += user_entry["indicators_count_filtered"]
         teams_data[leader]["total_closed"] += user_entry["closed_months"]
         teams_data[leader]["total_plans"] += user_entry["action_plans"]
         teams_data[leader]["total_evidence"] += user_entry["evidence_count"]
@@ -495,7 +528,7 @@ def get_global_dashboard(db: Session, year: int, month: int = None, area: str = 
 
     return {
         "year": year,
-        "month": filter_month,
+        "month": month,
         "total_users": total_users,
         "total_indicators": total_indicators,
         "total_tracked": total_tracked,

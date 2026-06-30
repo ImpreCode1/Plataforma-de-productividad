@@ -86,6 +86,30 @@ def get_unique_areas(db: Session):
     return sorted(list(normalized_areas))
 
 
+def normalize_direccion(direccion):
+    if not direccion:
+        return None
+    return direccion.strip().upper()
+
+
+def get_unique_direcciones(db: Session):
+    direcciones = db.query(User.direccion).filter(
+        User.direccion.isnot(None),
+        User.direccion != "",
+        User.is_active == True
+    ).distinct().all()
+
+    normalized = set()
+    for d in direcciones:
+        if not d[0]:
+            continue
+        n = normalize_direccion(d[0].strip())
+        if n:
+            normalized.add(n)
+
+    return sorted(list(normalized))
+
+
 def list_users(db: Session):
     users = db.query(User).all()
 
