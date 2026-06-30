@@ -20,6 +20,7 @@ class IndicatorAssignment(Base):
 
     target_value = Column(Numeric, nullable=False)
     weight = Column(Numeric, nullable=False)
+    is_descending = Column(Boolean, default=False, nullable=False)
     frequency = Column(String, default="MONTHLY")
 
     is_active = Column(Boolean, default=True)

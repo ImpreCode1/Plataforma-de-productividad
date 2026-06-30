@@ -151,7 +151,7 @@ def update_tracking(db: Session, tracking_id: UUID, achieved_value, achieved_tot
     tracking.achieved_value = achieved_value
     tracking.achieved_total = achieved_total
 
-    results = calculate_kpi_results(achieved_value, achieved_total, assignment.target_value, assignment.weight)
+    results = calculate_kpi_results(achieved_value, achieved_total, assignment.target_value, assignment.weight, is_descending=assignment.is_descending or False)
     tracking.achievement_percentage = results["achievement_percentage"]
     tracking.weighted_score = results["weighted_score"]
     tracking.target_met = results["target_met"]
@@ -188,7 +188,7 @@ def close_tracking(db: Session, tracking_id: UUID, achieved_value=None, achieved
 
         target_value = assignment.target_value if assignment else None
         weight = assignment.weight if assignment else None
-        results = calculate_kpi_results(achieved_value, achieved_total, target_value, weight)
+        results = calculate_kpi_results(achieved_value, achieved_total, target_value, weight, is_descending=assignment.is_descending or False)
         tracking.achievement_percentage = results["achievement_percentage"]
         tracking.weighted_score = results["weighted_score"]
         tracking.target_met = results["target_met"]
@@ -249,7 +249,7 @@ def close_assignment_direct(db: Session, assignment_id: UUID, achieved_value=Non
         tracking.achieved_value = achieved_value
         tracking.achieved_total = achieved_total
 
-        results = calculate_kpi_results(achieved_value, achieved_total, assignment.target_value, assignment.weight)
+        results = calculate_kpi_results(achieved_value, achieved_total, assignment.target_value, assignment.weight, is_descending=assignment.is_descending or False)
         tracking.achievement_percentage = results["achievement_percentage"]
         tracking.weighted_score = results["weighted_score"]
         tracking.target_met = results["target_met"]
