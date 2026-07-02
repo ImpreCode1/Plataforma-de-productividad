@@ -44,10 +44,12 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
+	"http://172.16.1.12",
         "http://localhost:5174",
         "http://localhost:3000",
         "https://www.impresistem.com",
         "https://impresistem.com",
+	"http://productividad.impresistem.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
