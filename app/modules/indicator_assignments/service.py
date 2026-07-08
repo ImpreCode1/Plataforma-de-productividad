@@ -11,6 +11,7 @@ from app.models.indicator_assignment import IndicatorAssignment
 from app.models.tracking import IndicatorTracking
 from app.models.user import User
 from app.models.role import Role, UserRole
+from app.modules.common.kpi_calculator import calculate_kpi_results
 
 
 def normalize_name(name):
@@ -20,6 +21,13 @@ def normalize_name(name):
     name = unicodedata.normalize('NFD', name)
     name = ''.join(c for c in name if not unicodedata.combining(c))
     return re.sub(r"\s+", " ", name.strip()).lower()
+
+
+def parse_descending(value) -> bool:
+    if value is None or pd.isna(value):
+        return False
+    str_val = str(value).strip().upper()
+    return "DESC" in str_val
 
 
 def names_match(name1, name2, threshold=0.6):
@@ -399,6 +407,7 @@ def import_assignments_from_excel(db: Session, file, year: int, month: int = Non
             existing.direccion_at_assignment = str(row.get("Dirección", "")).strip() if pd.notna(row.get("Dirección")) else user.direccion
             existing.linea_at_assignment = str(row.get("Linea", "")).strip() if pd.notna(row.get("Linea")) else user.linea
             existing.numero_linea_at_assignment = str(row.get("# Linea", "")).strip() if pd.notna(row.get("# Linea")) else user.numero_linea
+            existing.is_descending = parse_descending(row.get("Observaciones"))
             assignment = existing
             updated += 1
         else:
@@ -416,7 +425,8 @@ def import_assignments_from_excel(db: Session, file, year: int, month: int = Non
                 subarea_at_assignment=str(row.get("Área", "")).strip() if pd.notna(row.get("Área")) else user.subarea,
                 direccion_at_assignment=str(row.get("Dirección", "")).strip() if pd.notna(row.get("Dirección")) else user.direccion,
                 linea_at_assignment=str(row.get("Linea", "")).strip() if pd.notna(row.get("Linea")) else user.linea,
-                numero_linea_at_assignment=str(row.get("# Linea", "")).strip() if pd.notna(row.get("# Linea")) else user.numero_linea
+                numero_linea_at_assignment=str(row.get("# Linea", "")).strip() if pd.notna(row.get("# Linea")) else user.numero_linea,
+                is_descending=parse_descending(row.get("Observaciones"))
             )
             db.add(assignment)
             db.flush()
@@ -437,16 +447,32 @@ def import_assignments_from_excel(db: Session, file, year: int, month: int = Non
                 existing_tracking.achieved_value = achieved_value
                 existing_tracking.achieved_total = achieved_total
                 existing_tracking.weighted_score = logro_value
-                existing_tracking.target_met = logro_value is not None
-                if achieved_value is not None and achieved_total is not None and achieved_total != 0:
-                    existing_tracking.achievement_percentage = round((achieved_value / achieved_total) * 100, 2)
-                elif achieved_value is not None:
-                    existing_tracking.achievement_percentage = achieved_value
+                if achieved_value is not None:
+                    kpi = calculate_kpi_results(
+                        achieved_value,
+                        achieved_total,
+                        assignment.target_value,
+                        assignment.weight,
+                        is_descending=assignment.is_descending or False
+                    )
+                    existing_tracking.target_met = kpi["target_met"]
+                    existing_tracking.achievement_percentage = kpi["achievement_percentage"]
+                else:
+                    existing_tracking.target_met = None
                 if achieved_value is not None or logro_value is not None:
                     existing_tracking.status = "CLOSED"
                     existing_tracking.is_closed = True
                     existing_tracking.approval_status = "APROBADO"
             else:
+                kpi = None
+                if achieved_value is not None:
+                    kpi = calculate_kpi_results(
+                        achieved_value,
+                        achieved_total,
+                        assignment.target_value,
+                        assignment.weight,
+                        is_descending=assignment.is_descending or False
+                    )
                 tracking = IndicatorTracking(
                     user_id=user.id,
                     assignment_id=assignment.id,
@@ -455,15 +481,13 @@ def import_assignments_from_excel(db: Session, file, year: int, month: int = Non
                     achieved_value=achieved_value,
                     achieved_total=achieved_total,
                     weighted_score=logro_value,
-                    target_met=logro_value is not None,
+                    target_met=kpi["target_met"] if kpi else None,
                     status="CLOSED" if (achieved_value is not None or logro_value is not None) else "PENDING",
                     is_closed=(achieved_value is not None or logro_value is not None),
                     approval_status="APROBADO" if (achieved_value is not None or logro_value is not None) else "PENDIENTE",
                 )
-                if achieved_value is not None and achieved_total is not None and achieved_total != 0:
-                    tracking.achievement_percentage = round((achieved_value / achieved_total) * 100, 2)
-                elif achieved_value is not None:
-                    tracking.achievement_percentage = achieved_value
+                if kpi:
+                    tracking.achievement_percentage = kpi["achievement_percentage"]
                 db.add(tracking)
                 trackings_created += 1
 
@@ -781,6 +805,7 @@ def import_yearly_assignments_from_excel(db: Session, file):
                 existing_assignment.direccion_at_assignment = direccion_snapshot
                 existing_assignment.linea_at_assignment = linea_snapshot
                 existing_assignment.numero_linea_at_assignment = numero_linea_snapshot
+                existing_assignment.is_descending = parse_descending(row.get("Observaciones"))
                 assignment = existing_assignment
                 already_existed += 1
             else:
@@ -799,6 +824,7 @@ def import_yearly_assignments_from_excel(db: Session, file):
                     direccion_at_assignment=direccion_snapshot,
                     linea_at_assignment=linea_snapshot,
                     numero_linea_at_assignment=numero_linea_snapshot,
+                    is_descending=parse_descending(row.get("Observaciones")),
                 )
                 db.add(assignment)
                 db.flush()
@@ -814,12 +840,28 @@ def import_yearly_assignments_from_excel(db: Session, file):
                 existing_tracking.achieved_value = achieved_value
                 existing_tracking.achieved_total = achieved_total
                 existing_tracking.weighted_score = logro_value
-                existing_tracking.target_met = logro_value is not None
-                if achieved_value is not None and achieved_total is not None and achieved_total != 0:
-                    existing_tracking.achievement_percentage = round((achieved_value / achieved_total) * 100, 2)
-                elif achieved_value is not None:
-                    existing_tracking.achievement_percentage = achieved_value
+                if achieved_value is not None:
+                    kpi = calculate_kpi_results(
+                        achieved_value,
+                        achieved_total,
+                        assignment.target_value,
+                        assignment.weight,
+                        is_descending=assignment.is_descending or False
+                    )
+                    existing_tracking.target_met = kpi["target_met"]
+                    existing_tracking.achievement_percentage = kpi["achievement_percentage"]
+                else:
+                    existing_tracking.target_met = None
             else:
+                kpi = None
+                if achieved_value is not None:
+                    kpi = calculate_kpi_results(
+                        achieved_value,
+                        achieved_total,
+                        assignment.target_value,
+                        assignment.weight,
+                        is_descending=assignment.is_descending or False
+                    )
                 tracking = IndicatorTracking(
                     user_id=user.id,
                     assignment_id=assignment.id,
@@ -828,15 +870,13 @@ def import_yearly_assignments_from_excel(db: Session, file):
                     achieved_value=achieved_value,
                     achieved_total=achieved_total,
                     weighted_score=logro_value,
-                    target_met=logro_value is not None,
+                    target_met=kpi["target_met"] if kpi else None,
                     status="CLOSED",
                     is_closed=True,
                     approval_status="APROBADO",
                 )
-                if achieved_value is not None and achieved_total is not None and achieved_total != 0:
-                    tracking.achievement_percentage = round((achieved_value / achieved_total) * 100, 2)
-                elif achieved_value is not None:
-                    tracking.achievement_percentage = achieved_value
+                if kpi:
+                    tracking.achievement_percentage = kpi["achievement_percentage"]
                 db.add(tracking)
                 trackings_created += 1
 
