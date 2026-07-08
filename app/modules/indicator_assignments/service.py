@@ -12,6 +12,7 @@ from app.models.tracking import IndicatorTracking
 from app.models.user import User
 from app.models.role import Role, UserRole
 from app.modules.common.kpi_calculator import calculate_kpi_results
+from decimal import Decimal
 
 
 def normalize_name(name):
@@ -449,10 +450,10 @@ def import_assignments_from_excel(db: Session, file, year: int, month: int = Non
                 existing_tracking.weighted_score = logro_value
                 if achieved_value is not None:
                     kpi = calculate_kpi_results(
-                        achieved_value,
-                        achieved_total,
-                        assignment.target_value,
-                        assignment.weight,
+                        Decimal(str(achieved_value)),
+                        Decimal(str(achieved_total)) if achieved_total is not None else None,
+                        Decimal(str(assignment.target_value)) if assignment.target_value is not None else None,
+                        Decimal(str(assignment.weight)) if assignment.weight is not None else None,
                         is_descending=assignment.is_descending or False
                     )
                     existing_tracking.target_met = kpi["target_met"]
@@ -467,10 +468,10 @@ def import_assignments_from_excel(db: Session, file, year: int, month: int = Non
                 kpi = None
                 if achieved_value is not None:
                     kpi = calculate_kpi_results(
-                        achieved_value,
-                        achieved_total,
-                        assignment.target_value,
-                        assignment.weight,
+                        Decimal(str(achieved_value)),
+                        Decimal(str(achieved_total)) if achieved_total is not None else None,
+                        Decimal(str(assignment.target_value)) if assignment.target_value is not None else None,
+                        Decimal(str(assignment.weight)) if assignment.weight is not None else None,
                         is_descending=assignment.is_descending or False
                     )
                 tracking = IndicatorTracking(
@@ -842,10 +843,10 @@ def import_yearly_assignments_from_excel(db: Session, file):
                 existing_tracking.weighted_score = logro_value
                 if achieved_value is not None:
                     kpi = calculate_kpi_results(
-                        achieved_value,
-                        achieved_total,
-                        assignment.target_value,
-                        assignment.weight,
+                        Decimal(str(achieved_value)),
+                        Decimal(str(achieved_total)) if achieved_total is not None else None,
+                        Decimal(str(assignment.target_value)) if assignment.target_value is not None else None,
+                        Decimal(str(assignment.weight)) if assignment.weight is not None else None,
                         is_descending=assignment.is_descending or False
                     )
                     existing_tracking.target_met = kpi["target_met"]
@@ -856,10 +857,10 @@ def import_yearly_assignments_from_excel(db: Session, file):
                 kpi = None
                 if achieved_value is not None:
                     kpi = calculate_kpi_results(
-                        achieved_value,
-                        achieved_total,
-                        assignment.target_value,
-                        assignment.weight,
+                        Decimal(str(achieved_value)),
+                        Decimal(str(achieved_total)) if achieved_total is not None else None,
+                        Decimal(str(assignment.target_value)) if assignment.target_value is not None else None,
+                        Decimal(str(assignment.weight)) if assignment.weight is not None else None,
                         is_descending=assignment.is_descending or False
                     )
                 tracking = IndicatorTracking(
