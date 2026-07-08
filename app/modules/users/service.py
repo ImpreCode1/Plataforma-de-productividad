@@ -139,6 +139,35 @@ def get_unique_responsables(db: Session, area: str = None, direccion: str = None
     return sorted(list(set(u.name for u in all_users if u.name)))
 
 
+def normalize_subarea(subarea):
+    if not subarea:
+        return None
+    return subarea.strip().upper()
+
+
+def get_unique_subareas(db: Session, area: str = None, direccion: str = None):
+    all_users = db.query(User).filter(
+        User.is_active == True,
+        User.subarea.isnot(None),
+        User.subarea != ""
+    ).all()
+
+    if area:
+        normalized_area = normalize_area(area)
+        all_users = [u for u in all_users if normalize_area(u.area) == normalized_area]
+
+    if direccion:
+        normalized_dir = normalize_direccion(direccion)
+        all_users = [u for u in all_users if normalize_direccion(u.direccion) == normalized_dir]
+
+    normalized = set()
+    for u in all_users:
+        n = normalize_subarea(u.subarea)
+        if n:
+            normalized.add(n)
+    return sorted(list(normalized))
+
+
 def list_users(db: Session):
     users = db.query(User).all()
 

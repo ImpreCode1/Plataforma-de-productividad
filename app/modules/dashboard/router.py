@@ -79,6 +79,7 @@ def get_global_dashboard(
     quarter: Optional[int] = Query(default=None, ge=1, le=4),
     area: Optional[str] = Query(default=None),
     direccion: Optional[str] = Query(default=None),
+    subarea: Optional[str] = Query(default=None),
     responsable: Optional[str] = Query(default=None),
     cumplimiento: Optional[str] = Query(default=None),
     search: Optional[str] = Query(default=None),
@@ -86,7 +87,7 @@ def get_global_dashboard(
     current_user: CurrentUser = CurrentUser
 ):
     return service.get_global_dashboard(
-        db, year, month, quarter, area, direccion,
+        db, year, month, quarter, area, direccion, subarea,
         responsable, cumplimiento, search
     )
 
@@ -94,6 +95,20 @@ def get_global_dashboard(
 # ------------------------------------------------
 # FILTER OPTIONS
 # ------------------------------------------------
+
+@router.get(
+    "/filters/subareas",
+    response_model=list[str]
+)
+def get_subareas(
+    area: Optional[str] = Query(default=None),
+    direccion: Optional[str] = Query(default=None),
+    db: DBSession = DBSession,
+    current_user: CurrentUser = CurrentUser
+):
+    from app.modules.users.service import get_unique_subareas
+    return get_unique_subareas(db, area=area, direccion=direccion)
+
 
 @router.get(
     "/filters/direcciones",

@@ -139,7 +139,7 @@ def get_team_dashboard(db: Session, leader_id: UUID, year: int, month: int = Non
 # GLOBAL DASHBOARD (ADMIN) - All users overview
 # ------------------------------------------------
 
-def get_global_dashboard(db: Session, year: int, month: int = None, quarter: int = None, area: str = None, direccion: str = None, responsable: str = None, cumplimiento: str = None, search: str = None):
+def get_global_dashboard(db: Session, year: int, month: int = None, quarter: int = None, area: str = None, direccion: str = None, subarea: str = None, responsable: str = None, cumplimiento: str = None, search: str = None):
     from app.modules.users.service import normalize_area
     from collections import defaultdict
 
@@ -160,6 +160,15 @@ def get_global_dashboard(db: Session, year: int, month: int = None, quarter: int
             all_users = [
                 u for u in all_users
                 if normalize_direccion(u.direccion) == normalized_direccion
+            ]
+
+    if subarea:
+        from app.modules.users.service import normalize_subarea
+        normalized_subarea = normalize_subarea(subarea)
+        if normalized_subarea:
+            all_users = [
+                u for u in all_users
+                if normalize_subarea(u.subarea) == normalized_subarea
             ]
 
     if responsable:
